@@ -232,6 +232,12 @@ class MixedWM38Dataset(Dataset):
             image = transformed['image']
             mask = transformed['mask']
         
+        # 确保数组是连续的（翻转操作可能产生负步长）
+        if not image.flags['C_CONTIGUOUS']:
+            image = np.ascontiguousarray(image)
+        if not mask.flags['C_CONTIGUOUS']:
+            mask = np.ascontiguousarray(mask)
+        
         # 转换为 PyTorch 张量
         # 图像: (H, W, C) -> (C, H, W)
         image = torch.from_numpy(image).permute(2, 0, 1).float()

@@ -1,0 +1,10 @@
+class_id,class_name,sample_count,is_tail,f1,baseline_f1,delta,delta_pct
+0,Normal,0,No,0.0000,0.0000,+0.0000,+0.0%
+1,Center,0,No,0.0000,0.0000,+0.0000,+0.0%
+2,Donut,0,No,0.0000,0.0000,+0.0000,+0.0%
+3,EL,0,No,0.0000,0.0000,+0.0000,+0.0%
+4,ER,0,No,0.0000,0.0000,+0.0000,+0.0%
+5,LOC,0,No,0.0000,0.0000,+0.0000,+0.0%
+
+Summary
+Tail class count,0

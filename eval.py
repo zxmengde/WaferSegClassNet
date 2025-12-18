@@ -3,8 +3,15 @@
 """
 统一评估入口
 
+支持:
+- --config: 配置文件路径
+- --ckpt: 检查点路径
+
 Usage:
     python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
+    python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt --debug
+
+Requirements: 7.1
 """
 
 import argparse
@@ -27,9 +34,10 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config_schema import load_config
-from data.dataset import get_dataloaders
+from data.dataset import get_dataloaders, MixedWM38Dataset
 from data.mappings import CLASS_NAME_MAPPING
 from models.multitask import create_model
+from models.separation import PrototypeSeparator, save_separation_maps
 
 
 def setup_logging(log_dir: str):
@@ -187,6 +195,86 @@ def save_metrics_csv(metrics: dict, save_path: str, class_names: dict):
             writer.writerow([i, name, f"{f1:.4f}"])
 
 
+def save_tail_class_analysis(
+    metrics: dict,
+    class_counts: dict,
+    class_names: dict,
+    save_path: str,
+    tail_threshold: int = 10,
+    baseline_metrics: dict = None,
+):
+    """
+    保存尾部类别分析到 CSV
+    
+    Args:
+        metrics: 当前实验的评估指标
+        class_counts: 每类样本数
+        class_names: 类别名称映射
+        save_path: 保存路径
+        tail_threshold: 尾部类别阈值
+        baseline_metrics: 基线实验的指标（用于计算 delta）
+    """
+    per_class_f1 = metrics['per_class_f1']
+    baseline_f1 = baseline_metrics.get('per_class_f1') if baseline_metrics else None
+    
+    with open(save_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        
+        # 表头
+        header = ['class_id', 'class_name', 'sample_count', 'is_tail', 'f1']
+        if baseline_f1 is not None:
+            header.extend(['baseline_f1', 'delta', 'delta_pct'])
+        writer.writerow(header)
+        
+        # 按样本数排序（从少到多）
+        sorted_classes = sorted(class_counts.items(), key=lambda x: x[1])
+        
+        tail_f1_sum = 0.0
+        tail_count = 0
+        baseline_tail_f1_sum = 0.0
+        
+        for class_id, count in sorted_classes:
+            if class_id >= len(per_class_f1):
+                continue
+            
+            name = class_names.get(class_id, f"Class_{class_id}")
+            is_tail = count < tail_threshold and count > 0
+            f1 = per_class_f1[class_id]
+            
+            row = [class_id, name, count, 'Yes' if is_tail else 'No', f"{f1:.4f}"]
+            
+            if baseline_f1 is not None and class_id < len(baseline_f1):
+                base_f1 = baseline_f1[class_id]
+                delta = f1 - base_f1
+                delta_pct = (delta / max(base_f1, 1e-7)) * 100
+                row.extend([f"{base_f1:.4f}", f"{delta:+.4f}", f"{delta_pct:+.1f}%"])
+                
+                if is_tail:
+                    baseline_tail_f1_sum += base_f1
+            
+            if is_tail:
+                tail_f1_sum += f1
+                tail_count += 1
+            
+            writer.writerow(row)
+        
+        # 添加尾部类别汇总
+        writer.writerow([])
+        writer.writerow(['Summary'])
+        writer.writerow(['Tail class count', tail_count])
+        if tail_count > 0:
+            tail_macro_f1 = tail_f1_sum / tail_count
+            writer.writerow(['Tail Macro-F1', f"{tail_macro_f1:.4f}"])
+            
+            if baseline_f1 is not None:
+                baseline_tail_macro_f1 = baseline_tail_f1_sum / tail_count
+                tail_delta = tail_macro_f1 - baseline_tail_macro_f1
+                tail_delta_pct = (tail_delta / max(baseline_tail_macro_f1, 1e-7)) * 100
+                writer.writerow(['Baseline Tail Macro-F1', f"{baseline_tail_macro_f1:.4f}"])
+                writer.writerow(['Tail Delta', f"{tail_delta:+.4f}"])
+                writer.writerow(['Tail Delta %', f"{tail_delta_pct:+.1f}%"])
+
+
 def generate_seg_overlays(
     model,
     dataloader,
@@ -244,6 +332,109 @@ def generate_seg_overlays(
             count += 1
 
 
+@torch.no_grad()
+def generate_separation_maps(
+    model,
+    train_dataloader,
+    test_dataloader,
+    device: torch.device,
+    output_dir: str,
+    num_samples: int = 10,
+    temperature: float = 0.1,
+    logger=None,
+):
+    """
+    生成 E3 分离热力图
+    
+    使用 Prototype 相似度方法：
+    1. 从训练集构建 8 类基础缺陷的 prototype
+    2. 对测试样本计算与每个 prototype 的相似度
+    3. 输出 8 通道热力图
+    
+    Args:
+        model: 多任务模型
+        train_dataloader: 训练数据加载器（用于构建 prototype）
+        test_dataloader: 测试数据加载器
+        device: 计算设备
+        output_dir: 输出目录
+        num_samples: 最大样本数
+        temperature: 相似度温度参数
+        logger: 日志记录器
+    """
+    model.eval()
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    if logger:
+        logger.info("Creating PrototypeSeparator...")
+    
+    # 创建分离器
+    separator = PrototypeSeparator(
+        encoder=model.encoder,
+        device=str(device),
+        num_components=8,
+    )
+    
+    # 从训练数据构建 prototype
+    if logger:
+        logger.info("Building prototypes from training data...")
+    
+    stats = separator.build_prototypes(train_dataloader)
+    
+    if logger:
+        logger.info(f"Prototype statistics: {stats}")
+    
+    # 保存 prototype
+    proto_path = output_dir.parent / "prototypes.pt"
+    separator.save_prototypes(str(proto_path))
+    if logger:
+        logger.info(f"Prototypes saved to {proto_path}")
+    
+    # 收集测试样本
+    all_images = []
+    all_labels = []
+    
+    for batch in test_dataloader:
+        images = batch['image']
+        labels = batch['label_38']
+        
+        all_images.append(images)
+        all_labels.append(labels)
+        
+        if sum(len(x) for x in all_images) >= num_samples:
+            break
+    
+    all_images = torch.cat(all_images)[:num_samples]
+    all_labels = torch.cat(all_labels)[:num_samples]
+    
+    # 计算分离热力图
+    if logger:
+        logger.info(f"Computing separation maps for {len(all_images)} samples...")
+    
+    separation_maps = separator.compute_separation_maps(
+        all_images.to(device),
+        temperature=temperature,
+    )
+    
+    # 保存分离热力图
+    saved_files = save_separation_maps(
+        separation_maps=separation_maps,
+        images=all_images,
+        output_dir=str(output_dir),
+        max_samples=num_samples,
+    )
+    
+    if logger:
+        logger.info(f"Separation maps saved to {output_dir}")
+        logger.info(f"Saved {len(saved_files)} files")
+    
+    return {
+        'prototype_stats': stats,
+        'num_samples': len(all_images),
+        'saved_files': saved_files,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate wafer map model")
     parser.add_argument("--config", "-c", type=str, required=True, help="Config file path")
@@ -299,17 +490,22 @@ def main():
     
     # 创建模型
     logger.info("Creating model...")
+    
+    # 对于 E3 prototype 模式，不需要分离头（使用 PrototypeSeparator 代替）
+    separation_mode = getattr(config.model, 'separation_mode', 'prototype')
+    model_separation_enabled = config.model.separation_enabled and separation_mode != 'prototype'
+    
     model = create_model(
         encoder=config.model.encoder,
         classification_classes=config.model.classification_classes,
         segmentation_classes=config.model.segmentation_classes,
-        separation_enabled=config.model.separation_enabled,
+        separation_enabled=model_separation_enabled,
         separation_channels=config.model.separation_channels,
     )
     
     # 加载权重
     logger.info(f"Loading checkpoint from {args.ckpt}")
-    checkpoint = torch.load(args.ckpt, map_location='cpu')
+    checkpoint = torch.load(args.ckpt, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     
@@ -342,6 +538,54 @@ def main():
     )
     logger.info(f"Metrics saved to {output_dir / 'metrics.csv'}")
     
+    # 生成尾部类别分析（如果使用了加权采样或 focal loss）
+    sampler_mode = getattr(config.data, 'sampler', 'uniform')
+    loss_type = config.loss.classification
+    
+    if sampler_mode not in ['uniform', 'none', None] or loss_type in ['focal', 'class_balanced']:
+        logger.info("Generating tail class analysis...")
+        
+        # 获取类别统计
+        test_dataset = test_loader.dataset
+        class_counts = test_dataset.get_class_counts()
+        tail_threshold = getattr(config.data, 'tail_class_threshold', 10)
+        
+        # 尝试加载基线指标（E0）
+        baseline_metrics = None
+        baseline_path = Path(config.output.results_dir) / "e0" / "metrics.csv"
+        if baseline_path.exists():
+            try:
+                # 解析基线 metrics.csv 获取 per_class_f1
+                baseline_per_class_f1 = []
+                with open(baseline_path, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    in_class_section = False
+                    for row in reader:
+                        if len(row) >= 3 and row[0] == 'Class':
+                            in_class_section = True
+                            continue
+                        if in_class_section and len(row) >= 3:
+                            try:
+                                baseline_per_class_f1.append(float(row[2]))
+                            except (ValueError, IndexError):
+                                pass
+                if baseline_per_class_f1:
+                    baseline_metrics = {'per_class_f1': np.array(baseline_per_class_f1)}
+                    logger.info(f"Loaded baseline metrics from {baseline_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load baseline metrics: {e}")
+        
+        # 保存尾部类别分析
+        save_tail_class_analysis(
+            metrics=metrics,
+            class_counts=class_counts,
+            class_names=CLASS_NAME_MAPPING,
+            save_path=str(output_dir / "tail_class_analysis.csv"),
+            tail_threshold=tail_threshold,
+            baseline_metrics=baseline_metrics,
+        )
+        logger.info(f"Tail class analysis saved to {output_dir / 'tail_class_analysis.csv'}")
+    
     # 绘制混淆矩阵
     plot_confusion_matrix(
         labels=metrics['labels'],
@@ -362,6 +606,48 @@ def main():
         amp_enabled=config.training.amp_enabled,
     )
     logger.info(f"Segmentation overlays saved to {seg_overlay_dir}")
+    
+    # E3: 生成分离热力图（如果启用）
+    if config.model.separation_enabled:
+        logger.info("\n" + "=" * 50)
+        logger.info("E3 Separation Evaluation")
+        logger.info("=" * 50)
+        
+        # 获取分离模式和温度参数
+        separation_mode = getattr(config.model, 'separation_mode', 'prototype')
+        separation_temperature = getattr(config.model, 'separation_temperature', 0.1)
+        
+        logger.info(f"Separation mode: {separation_mode}")
+        logger.info(f"Temperature: {separation_temperature}")
+        
+        if separation_mode == "prototype":
+            # 需要训练数据加载器来构建 prototype
+            logger.info("Creating train dataloader for prototype building...")
+            train_loader, _, _ = get_dataloaders(
+                data_root=config.data.data_root,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                classification_mode=config.data.classification_mode,
+                debug=config.debug,
+                max_per_class=max_per_class or 5,
+            )
+            
+            sep_dir = output_dir / "separation_maps"
+            sep_results = generate_separation_maps(
+                model=model,
+                train_dataloader=train_loader,
+                test_dataloader=test_loader,
+                device=device,
+                output_dir=str(sep_dir),
+                num_samples=10,
+                temperature=separation_temperature,
+                logger=logger,
+            )
+            
+            logger.info(f"Separation evaluation complete")
+            logger.info(f"Prototype stats: {sep_results['prototype_stats']}")
+        else:
+            logger.warning(f"Separation mode '{separation_mode}' not implemented, skipping")
     
     # 生成训练曲线（如果有历史记录）
     history_path = output_dir / "history.json"

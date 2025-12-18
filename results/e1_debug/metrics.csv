@@ -1,0 +1,17 @@
+Metric,Value
+Accuracy,0.0000
+Macro-F1,0.0000
+Micro-F1,0.0000
+Weighted-F1,0.0000
+Dice,0.7723
+IoU,0.6298
+
+Class,Name,F1
+0,Normal,0.0000
+1,Center,0.0000
+2,Donut,0.0000
+3,EL,0.0000
+4,ER,0.0000
+5,LOC,0.0000
+6,NF,0.0000
+7,S,0.0000

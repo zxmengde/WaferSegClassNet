@@ -10,8 +10,18 @@ from .losses import (
     BCEDiceLoss,
     FocalLoss,
     ClassBalancedLoss,
+    KLDivergenceLoss,
+    MSELoss,
     MultiTaskLoss,
     dice_coef,
+    create_loss,
+    create_loss_from_config,
+)
+from .separation import (
+    PrototypeSeparator,
+    SeparationEvaluator,
+    save_separation_maps,
+    create_separation_evaluator,
 )
 
 __all__ = [
@@ -28,6 +38,14 @@ __all__ = [
     'BCEDiceLoss',
     'FocalLoss',
     'ClassBalancedLoss',
+    'KLDivergenceLoss',
+    'MSELoss',
     'MultiTaskLoss',
     'dice_coef',
+    'create_loss',
+    'create_loss_from_config',
+    'PrototypeSeparator',
+    'SeparationEvaluator',
+    'save_separation_maps',
+    'create_separation_evaluator',
 ]

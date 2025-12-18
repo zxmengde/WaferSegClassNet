@@ -1,0 +1,65 @@
+data:
+  augmentation:
+    color_jitter: 0.0
+    flip: true
+    morphological_noise: 0.15
+    rotation:
+    - 0
+    - 90
+    - 180
+    - 270
+    wafer_friendly: true
+  batch_size: 32
+  classification_mode: single_label
+  data_root: data/processed
+  dataset: MixedWM38
+  image_size:
+  - 224
+  - 224
+  num_workers: 4
+  sampler: inverse
+  sampler_beta: 0.9999
+  tail_augmentation_strength: 2.0
+  tail_class_threshold: 10
+debug: false
+loss:
+  class_balanced_beta: 0.9999
+  classification: focal
+  focal_alpha: null
+  focal_gamma: 2.0
+  segmentation: bce_dice
+  separation: kl_divergence
+  weights:
+  - 1.0
+  - 1.0
+  - 0.5
+model:
+  classification_classes: 38
+  encoder: custom
+  key_mapping:
+    extract_subtree: null
+    strip_prefix: []
+    use_encoder_state_dict: true
+  pretrained_weights: null
+  segmentation_classes: 1
+  separation_channels: 8
+  separation_enabled: false
+  separation_mode: prototype
+  separation_temperature: 0.1
+name: e2
+output:
+  results_dir: results
+  save_every: 10
+seed: 42
+training:
+  amp_enabled: true
+  checkpoint_metric: macro_f1
+  debug_batch_size: 8
+  debug_epochs: 2
+  debug_max_per_class: 5
+  epochs: 100
+  grad_accum_steps: 1
+  learning_rate: 0.001
+  optimizer: adamw
+  scheduler: cosine
+  weight_decay: 0.01

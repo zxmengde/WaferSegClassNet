@@ -205,6 +205,7 @@ class WaferEncoder(nn.Module):
             key_mapping: 可选的 key 映射规则
                 - strip_prefix: 要剥离的前缀列表
                 - extract_subtree: 要提取的子树
+                - use_encoder_state_dict: 是否使用 encoder_state_dict（SSL checkpoint）
             output_dir: 输出目录（用于保存 weight_loading.json）
             
         Returns:
@@ -213,15 +214,26 @@ class WaferEncoder(nn.Module):
         key_mapping = key_mapping or {}
         strip_prefixes = key_mapping.get('strip_prefix', [])
         extract_subtree = key_mapping.get('extract_subtree', None)
+        use_encoder_state_dict = key_mapping.get('use_encoder_state_dict', False)
         
         # 加载检查点
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
         
         # 提取状态字典
-        if 'state_dict' in checkpoint:
+        # 优先使用 encoder_state_dict（SSL checkpoint 格式）
+        if use_encoder_state_dict and 'encoder_state_dict' in checkpoint:
+            state_dict = checkpoint['encoder_state_dict']
+            logger.info("Using encoder_state_dict from SSL checkpoint")
+        elif 'encoder_state_dict' in checkpoint:
+            # 自动检测 SSL checkpoint 格式
+            state_dict = checkpoint['encoder_state_dict']
+            logger.info("Auto-detected encoder_state_dict from SSL checkpoint")
+        elif 'state_dict' in checkpoint:
             state_dict = checkpoint['state_dict']
         elif 'model' in checkpoint:
             state_dict = checkpoint['model']
+        elif 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
         else:
             state_dict = checkpoint
         

@@ -1,0 +1,130 @@
+# =============================================================================
+# E0 基线配置模板
+# MixedWM38 混合缺陷晶圆图谱多任务识别系统
+# =============================================================================
+# 
+# 本模板包含所有必需字段和默认值，作为其他配置的基础模板
+# 使用方法：复制此文件并根据实验需求修改参数
+#
+# Requirements: 7.1 - 统一入口配置格式
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 实验基本信息
+# -----------------------------------------------------------------------------
+experiment:
+  name: "e0_template"           # 实验名称，用于结果目录命名
+  seed: 42                      # 随机种子，确保可复现性
+  debug: false                  # Debug模式：true时使用少量样本快速验证
+
+# -----------------------------------------------------------------------------
+# 数据配置
+# -----------------------------------------------------------------------------
+data:
+  dataset: "MixedWM38"          # 数据集名称
+  data_root: "data/processed"   # 数据根目录
+  image_size: [224, 224]        # 输入图像尺寸 [H, W]
+  batch_size: 32                # 批次大小
+  num_workers: 4                # 数据加载线程数
+  classification_mode: "single_label"  # 分类模式: single_label | multi_label
+  
+  # 采样器配置（用于长尾增强 E2）
+  sampler: "uniform"            # 采样器: uniform | weighted | sqrt_weighted
+  tail_class_threshold: 100     # 尾部类别阈值（样本数少于此值）
+  tail_augmentation_strength: 1.0  # 尾部类别增强强度倍数
+  
+  # 数据增强配置
+  augmentation:
+    wafer_friendly: true        # 使用晶圆友好的增强（避免破坏中心/边缘语义）
+    rotation: [0, 90, 180, 270] # 旋转角度列表
+    flip: true                  # 是否启用翻转
+    morphological_noise: 0.1    # 形态学噪声强度
+    color_jitter: 0.0           # 颜色抖动强度
+
+# -----------------------------------------------------------------------------
+# 模型配置
+# -----------------------------------------------------------------------------
+model:
+  encoder: "custom"             # 编码器类型: custom | resnet18 | resnet34
+  pretrained_weights: null      # 预训练权重路径（SSL checkpoint）
+  classification_classes: 38    # 分类类别数
+  segmentation_classes: 1       # 分割类别数（二值分割为1）
+  separation_enabled: false     # 是否启用成分分离头（E3）
+  separation_channels: 8        # 分离头输出通道数（8类基础缺陷）
+  separation_mode: "prototype"  # 分离模式: prototype | trained
+
+# -----------------------------------------------------------------------------
+# 训练配置
+# -----------------------------------------------------------------------------
+training:
+  epochs: 100                   # 训练轮数
+  optimizer: "adamw"            # 优化器: adam | adamw | sgd
+  learning_rate: 0.001          # 初始学习率
+  weight_decay: 0.01            # 权重衰减
+  scheduler: "cosine"           # 学习率调度器: cosine | step | plateau | none
+  amp_enabled: true             # 是否启用混合精度训练
+  checkpoint_metric: "macro_f1" # 最佳模型选择指标: macro_f1 | dice | weighted_sum
+  grad_accum_steps: 1           # 梯度累积步数（用于模拟更大batch_size）
+  
+  # Debug模式参数
+  debug_epochs: 2               # Debug模式训练轮数
+  debug_batch_size: 8           # Debug模式批次大小
+  debug_max_per_class: 5        # Debug模式每类最大样本数
+
+# -----------------------------------------------------------------------------
+# 损失函数配置
+# -----------------------------------------------------------------------------
+loss:
+  classification: "cross_entropy"  # 分类损失: cross_entropy | focal | class_balanced
+  segmentation: "bce_dice"         # 分割损失: bce_dice | dice | bce
+  separation: "kl_divergence"      # 分离损失: kl_divergence | mse
+  weights: [1.0, 1.0, 0.5]         # 多任务损失权重 [cls, seg, sep]
+  
+  # Focal Loss 参数
+  focal_gamma: 2.0              # Focal Loss gamma参数
+  focal_alpha: null             # Focal Loss alpha参数（null表示自动计算）
+  
+  # Class-Balanced Loss 参数
+  class_balanced_beta: 0.9999   # 有效样本数计算的beta参数
+
+# -----------------------------------------------------------------------------
+# 输出配置
+# -----------------------------------------------------------------------------
+output:
+  results_dir: "results"        # 结果输出根目录
+  save_every: 10                # 每N个epoch保存一次checkpoint
+
+# =============================================================================
+# 配置说明
+# =============================================================================
+#
+# 1. 实验命名规范：
+#    - e0: 基线实验
+#    - e1: SSL预训练实验
+#    - e2: 长尾增强实验
+#    - e3: 成分分离实验
+#
+# 2. Debug模式：
+#    设置 experiment.debug: true 可快速验证训练流程
+#    - 每类最多5个样本
+#    - 训练2个epoch
+#    - 禁用分离头
+#    - 预期5分钟内完成
+#
+# 3. 显存不足解决方案：
+#    - 降低 data.batch_size
+#    - 启用 training.amp_enabled: true
+#    - 增加 training.grad_accum_steps
+#    - 降低 data.image_size
+#
+# 4. 输出目录结构：
+#    results/<exp_name>/
+#    ├── metrics.csv
+#    ├── confusion_matrix.png
+#    ├── config_snapshot.yaml
+#    ├── meta.json
+#    ├── checkpoints/
+#    ├── curves/
+#    └── seg_overlays/
+#
+# =============================================================================

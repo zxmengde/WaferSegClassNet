@@ -1,0 +1,73 @@
+# E1 实验配置
+# E0 + SSL 预训练初始化 encoder
+# 使用 Phase 15 产出的 SSL checkpoint 初始化编码器权重
+
+experiment:
+  name: "e1"
+  seed: 42
+  debug: false
+
+data:
+  dataset: "MixedWM38"
+  data_root: "data/processed"
+  image_size: [224, 224]
+  batch_size: 32
+  num_workers: 4
+  classification_mode: "single_label"
+  augmentation:
+    wafer_friendly: true
+    rotation: [0, 90, 180, 270]
+    flip: true
+    morphological_noise: 0.1
+
+model:
+  encoder: "custom"
+  # SSL 预训练权重路径
+  # 默认使用 Phase 15 产出的 ssl_debug checkpoint
+  # 可切换到 ssl 完整训练的 checkpoint 或公开预训练权重
+  pretrained_weights: "results/ssl_debug/checkpoints/last.pt"
+  # 备选路径（完整 SSL 训练）:
+  # pretrained_weights: "results/ssl/checkpoints/last.pt"
+  # 备选路径（公开预训练权重，如 WaPIRL）:
+  # pretrained_weights: "weights/wapirl_encoder.pt"
+  
+  # 权重加载 key mapping 规则
+  # SSL checkpoint 结构: encoder_state_dict 包含编码器权重
+  key_mapping:
+    # 从 checkpoint 中提取 encoder 子树
+    extract_subtree: null  # SSL checkpoint 已有 encoder_state_dict
+    # 要剥离的前缀列表
+    strip_prefix: []
+    # 使用 encoder_state_dict 而非 model_state_dict
+    use_encoder_state_dict: true
+  
+  classification_classes: 38
+  segmentation_classes: 1
+  separation_enabled: false
+  separation_channels: 8
+
+training:
+  epochs: 100
+  optimizer: "adamw"
+  learning_rate: 0.001
+  weight_decay: 0.01
+  scheduler: "cosine"
+  amp_enabled: true
+  checkpoint_metric: "macro_f1"
+  grad_accum_steps: 1
+  debug_epochs: 2
+  debug_batch_size: 8
+  debug_max_per_class: 5
+
+loss:
+  classification: "cross_entropy"
+  segmentation: "bce_dice"
+  separation: "kl_divergence"
+  weights: [1.0, 1.0, 0.5]
+  focal_gamma: 2.0
+  focal_alpha: null
+  class_balanced_beta: 0.9999
+
+output:
+  results_dir: "results"
+  save_every: 10

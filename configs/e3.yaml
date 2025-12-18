@@ -1,0 +1,69 @@
+# E3 实验配置
+# E1 + 8 通道弱监督成分分离
+# 基于 E1 的 checkpoint，使用 Prototype 相似度方法生成分离热力图
+# 不需要重新训练，在 eval 阶段生成 separation_maps
+
+experiment:
+  name: "e3"
+  seed: 42
+  debug: false
+
+data:
+  dataset: "MixedWM38"
+  data_root: "data/processed"
+  image_size: [224, 224]
+  batch_size: 32
+  num_workers: 4
+  classification_mode: "single_label"
+  augmentation:
+    wafer_friendly: true
+    rotation: [0, 90, 180, 270]
+    flip: true
+    morphological_noise: 0.1
+
+model:
+  encoder: "custom"
+  # 使用 E1 的 checkpoint（已加载 SSL 预训练权重）
+  # 评估时通过 --ckpt 参数指定
+  pretrained_weights: null
+  
+  # 权重加载 key mapping 规则
+  key_mapping:
+    extract_subtree: null
+    strip_prefix: []
+    use_encoder_state_dict: false
+  
+  classification_classes: 38
+  segmentation_classes: 1
+  
+  # E3 分离配置
+  separation_enabled: true
+  separation_mode: "prototype"  # prototype | trained
+  separation_channels: 8
+  separation_temperature: 0.1  # cosine similarity 温度参数
+
+training:
+  epochs: 100
+  optimizer: "adamw"
+  learning_rate: 0.001
+  weight_decay: 0.01
+  scheduler: "cosine"
+  amp_enabled: true
+  checkpoint_metric: "macro_f1"
+  grad_accum_steps: 1
+  debug_epochs: 2
+  debug_batch_size: 8
+  debug_max_per_class: 5
+
+loss:
+  classification: "cross_entropy"
+  segmentation: "bce_dice"
+  separation: "kl_divergence"
+  weights: [1.0, 1.0, 0.5]
+  focal_gamma: 2.0
+  focal_alpha: null
+  class_balanced_beta: 0.9999
+
+output:
+  results_dir: "results"
+  save_every: 10

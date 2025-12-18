@@ -1,24 +1,111 @@
-# 学习指南：从零开始的深度学习实验
+# 新手学习指南
 
 > 面向深度学习新手的完整教程，手把手教你完成晶圆缺陷识别实验
+> 
+> **问题处理原则**：记录假设 + 给出备选方案 + 默认采用保守实现
 
 ---
 
 ## 📚 目录
 
-1. [环境配置](#1-环境配置)
-2. [数据准备](#2-数据准备)
-3. [模型训练](#3-模型训练)
-4. [结果评估](#4-结果评估)
-5. [常见问题排查](#5-常见问题排查)
+1. [快速开始命令清单](#1-快速开始命令清单)
+2. [环境配置](#2-环境配置)
+3. [数据准备](#3-数据准备)
+4. [实验执行（E0-E3）](#4-实验执行e0-e3)
+5. [常见报错排查](#5-常见报错排查)
 6. [关键概念小抄](#6-关键概念小抄)
 7. [如何读懂训练日志](#7-如何读懂训练日志)
+8. [问题处理原则](#8-问题处理原则)
 
 ---
 
-## 1. 环境配置
+## 1. 快速开始命令清单
 
-### 1.1 激活conda环境
+### 1.1 环境安装
+
+```bash
+# 方法1：使用 environment.yml（推荐）
+conda env create -f environment.yml
+conda activate wafer-seg-class
+
+# 方法2：手动安装
+conda create -n wafer-seg-class python=3.10 -y
+conda activate wafer-seg-class
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt
+```
+
+### 1.2 数据准备
+
+```bash
+# 完整数据
+python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed
+
+# Debug模式（每类最多5样本，快速验证）
+python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
+
+# 验证数据完整性
+python scripts/sanity_check_data.py --data_root data/processed
+```
+
+### 1.3 Debug训练（5分钟内完成）
+
+```bash
+python train.py --config configs/e0.yaml --debug
+```
+
+### 1.4 完整实验流程
+
+```bash
+# ========== E0 基线实验 ==========
+python train.py --config configs/e0.yaml
+python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
+
+# ========== SSL 预训练 ==========
+# Debug验证（快速）
+python train_ssl.py --config configs/ssl_debug.yaml
+
+# 完整SSL预训练（可选，支持断点续训）
+python train_ssl.py --config configs/ssl.yaml
+
+# ========== E1 SSL权重加载实验 ==========
+python train.py --config configs/e1.yaml
+python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+
+# ========== E2 长尾增强实验 ==========
+python train.py --config configs/e2.yaml
+python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
+
+# ========== E3 成分分离实验 ==========
+# 基于E1的checkpoint生成分离热力图
+python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
+
+# ========== 生成报告和PPT ==========
+# 生成对比表
+python scripts/generate_comparison.py --results_root results --out results/comparison.csv
+
+# 生成实验报告
+python scripts/generate_report.py --results_root results --out report/REPORT.md
+
+# 生成PPT大纲
+python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+
+# 生成PPT文件
+python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+```
+
+### 1.5 断点续训
+
+```bash
+# 从最后的checkpoint恢复训练
+python train.py --config configs/e0.yaml --resume results/e0/checkpoints/last.pt
+```
+
+---
+
+## 2. 环境配置
+
+### 2.1 激活conda环境
 
 **命令：**
 ```bash
@@ -39,248 +126,221 @@ PyTorch: 2.5.1+cu121
 CUDA: True
 ```
 
-### 1.2 常见环境问题
+### 2.2 验证完整环境
 
-**问题1：找不到conda命令**
-- **原因**：conda未添加到PATH
-- **解决**：使用Anaconda Prompt或重新安装Miniconda
+```bash
+python scripts/verify_setup.py
+```
 
-**问题2：CUDA不可用**
-- **原因**：PyTorch版本与CUDA版本不匹配
-- **解决**：重新安装对应版本的PyTorch（见 `docs/SETUP_WINDOWS.md`）
+**预期输出：**
+```
+✓ PyTorch: 2.x.x
+✓ CUDA available: True
+✓ GPU: NVIDIA GeForce RTX 4070 SUPER
+✓ All dependencies installed
+```
+
+### 2.3 常见环境问题
+
+| 问题 | 原因 | 解决方案 |
+|------|------|----------|
+| 找不到conda命令 | conda未添加到PATH | 使用Anaconda Prompt或重新安装 |
+| CUDA不可用 | PyTorch版本与CUDA不匹配 | 重装PyTorch（见SETUP_WINDOWS.md） |
+| ModuleNotFoundError | 依赖未安装 | `pip install -r requirements.txt` |
 
 ---
 
-## 2. 数据准备
+## 3. 数据准备
 
-### 2.1 准备数据集
+### 3.1 数据集放置
 
-**步骤1：放置原始数据**
 ```
-data/raw/MixedWM38.npz  ← 你的数据集文件
+data/
+├── raw/
+│   └── MixedWM38.npz    ← 你的数据集文件
+└── processed/           ← 运行脚本后自动生成
 ```
 
-**步骤2：运行数据准备脚本（debug模式）**
+### 3.2 运行数据准备
+
 ```bash
-conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
+# Debug模式（推荐先用这个验证流程）
+python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
+
+# 完整数据
+python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed
 ```
 
 **预期输出：**
 ```
+[Info] Loading data from data/raw/MixedWM38.npz
 [Info] Total samples: 38015
-[Info] Debug mode: max 5 samples per class
-[Info] Selected 190 samples for debug
-[Info] Processed 190 samples
+[Info] Processing images...
+[Info] Saved to data/processed/
 ✓ Data preparation completed!
 ```
 
-**步骤3：验证数据**
-```bash
-conda run -n wafer-seg-class python scripts/sanity_check_data.py --data_root data/processed
-```
+### 3.3 数据格式说明
 
-**预期输出：**
-```
-✓ Data sanity check PASSED
-```
+**38类标签映射：**
+- 类0：Normal（正常）
+- 类1-8：8种单一缺陷（Center, Donut, EL, ER, LOC, NF, S, Random）
+- 类9-37：29种混合缺陷
 
-### 2.2 数据准备做了什么？
-
-1. **加载原始数据**：从 `.npz` 文件读取晶圆图谱和标签
-2. **像素值处理**：将异常像素值clip到0-2范围
-3. **图像缩放**：从52×52缩放到224×224（模型输入尺寸）
-4. **颜色映射**：
-   - 0（背景）→ 紫色 [255, 0, 255]
-   - 1（正常）→ 青色 [0, 255, 255]
-   - 2（缺陷）→ 黄色 [255, 255, 0]
-5. **生成mask**：缺陷区域为白色（255），其他为黑色（0）
-6. **保存文件**：
-   - `data/processed/Images/` - RGB图像
-   - `data/processed/Labels/` - 标签（8维向量）
-   - `data/processed/Masks/` - 分割掩码
-
-### 2.3 数据格式说明
-
-**标签格式（8维向量）：**
+**8类多标签格式：**
 ```
 [Center, Donut, Edge-Loc, Edge-Ring, Local, Near-full, Scratch, Random]
 例如：[1, 0, 1, 0, 0, 0, 0, 0] 表示 Center + Edge-Loc 混合缺陷
 ```
 
-**38类映射：**
-- 类0：Normal（正常）
-- 类1-8：8种单一缺陷
-- 类9-37：29种混合缺陷
-
 ---
 
-## 3. 模型训练
+## 4. 实验执行（E0-E3）
 
-### 3.1 Debug模式训练（快速验证）
+### 4.1 E0 基线实验
 
-**命令：**
+**目的：** 建立多任务学习基线（分类+分割）
+
+**训练：**
 ```bash
-conda run -n wafer-seg-class python train.py --config configs/e0_debug.yaml
+python train.py --config configs/e0.yaml
 ```
 
-**预期时间：** 约5秒
-
-**预期输出：**
-```
-Experiment: e0_debug_debug
-Device: cuda
-GPU: NVIDIA GeForce RTX 4070 SUPER
-Train samples: 152
-Val samples: 19
-
-Epoch 1/2
-Training: 100%|██████████| 19/19 [00:01<00:00]
-Train - Loss: 4.15, Acc: 0.046, Dice: 0.629
-Val - Loss: 4.29, Dice: 0.690
-
-Epoch 2/2
-Training: 100%|██████████| 19/19 [00:00<00:00]
-Train - Loss: 3.99, Acc: 0.086, Dice: 0.754
-Val - Loss: 5.39, Dice: 0.834
-
-Training completed!
-```
-
-### 3.2 完整训练（E0基线）
-
-**命令：**
+**评估：**
 ```bash
-conda run -n wafer-seg-class python train.py --config configs/e0.yaml
+python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
 ```
 
-**预期时间：** 约30-60分钟（取决于数据量和GPU）
-
-**配置说明（`configs/e0.yaml`）：**
-```yaml
-experiment:
-  name: "e0"           # 实验名称
-  seed: 42             # 随机种子（保证可复现）
-  debug: false         # 完整训练模式
-
-data:
-  batch_size: 32       # 批次大小（根据显存调整）
-  num_workers: 4       # 数据加载线程数
-
-training:
-  epochs: 100          # 训练轮数
-  learning_rate: 0.001 # 学习率
-  amp_enabled: true    # 混合精度训练（节省显存）
-```
-
-### 3.3 训练过程中发生了什么？
-
-**每个epoch的流程：**
-
-1. **训练阶段（Training）**
-   - 模型读取一批图像（batch_size=8或32）
-   - 前向传播：图像 → 编码器 → 解码器 → 输出（分类+分割）
-   - 计算损失：分类损失 + 分割损失
-   - 反向传播：计算梯度
-   - 更新参数：优化器调整模型权重
-
-2. **验证阶段（Validation）**
-   - 使用验证集评估模型性能
-   - 不更新参数，只计算指标
-   - 根据macro-F1保存最佳模型
-
-3. **保存checkpoint**
-   - `last.pt`：最后一个epoch的模型
-   - `best.pt`：验证集上表现最好的模型
-
----
-
-## 4. 结果评估
-
-### 4.1 评估命令
-
-```bash
-conda run -n wafer-seg-class python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
-```
-
-### 4.2 输出文件
-
-**目录结构：**
+**输出目录：**
 ```
 results/e0/
 ├── checkpoints/
-│   ├── best.pt          # 最佳模型
-│   └── last.pt          # 最后模型
+│   ├── best.pt          # 最佳模型（按Macro-F1）
+│   └── last.pt          # 最后epoch模型
 ├── metrics.csv          # 指标汇总
 ├── confusion_matrix.png # 混淆矩阵
 ├── seg_overlays/        # 分割可视化
 ├── curves/              # 训练曲线
-│   ├── loss.png
-│   └── metrics.png
-├── train.log            # 训练日志
-└── config_snapshot.yaml # 配置快照
+├── config_snapshot.yaml # 配置快照
+└── meta.json            # 元信息（git commit, seed）
+```
+
+### 4.2 E1 SSL预训练实验
+
+**目的：** 使用自监督预训练提升特征表示
+
+**步骤1：SSL预训练（可选）**
+```bash
+# Debug验证
+python train_ssl.py --config configs/ssl_debug.yaml
+
+# 完整预训练
+python train_ssl.py --config configs/ssl.yaml
+```
+
+**步骤2：E1训练**
+```bash
+python train.py --config configs/e1.yaml
+```
+
+**步骤3：评估**
+```bash
+python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+```
+
+**验证权重加载：**
+- 查看 `results/e1/weight_loading.json`
+- 应包含 `matched`, `missing`, `unexpected` 字段
+
+### 4.3 E2 长尾增强实验
+
+**目的：** 处理类别不平衡问题
+
+**训练：**
+```bash
+python train.py --config configs/e2.yaml
+```
+
+**评估：**
+```bash
+python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
+```
+
+**特殊输出：**
+- `results/e2_debug/tail_class_analysis.csv` - 尾部类别分析
+
+### 4.4 E3 成分分离实验
+
+**目的：** 对混合缺陷进行成分分离
+
+**评估（基于E1模型）：**
+```bash
+python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
+```
+
+**特殊输出：**
+```
+results/e3/
+├── separation_maps/     # 8通道分离热力图
+│   ├── sample_xxx.png   # 可视化图片
+│   └── sample_xxx.pt    # 原始tensor
+└── prototypes.pt        # 原型向量
 ```
 
 ---
 
-## 5. 常见问题排查
+## 5. 常见报错排查
 
-### 5.1 CUDA相关问题
+### 5.1 CUDA相关
 
-**问题：RuntimeError: CUDA out of memory**
+#### 问题：CUDA out of memory
 
-**原因：** 显存不足
-
-**解决方案（按优先级）：**
-1. 减小batch_size（32 → 16 → 8）
-2. 减小图像尺寸（224 → 128）
-3. 禁用AMP（`amp_enabled: false`）
-4. 减少num_workers（4 → 2 → 0）
-
-**修改配置：**
-```yaml
-data:
-  batch_size: 8  # 从32改为8
-
-training:
-  amp_enabled: false  # 禁用混合精度
+**症状：**
 ```
-
----
-
-### 5.2 数据加载问题
-
-**问题：FileNotFoundError: data/processed/Images/...**
+RuntimeError: CUDA out of memory. Tried to allocate xxx MiB
+```
 
 **排查步骤：**
-1. 检查数据是否准备完成
-   ```bash
-   dir data\processed\Images
-   ```
-2. 重新运行数据准备脚本
-3. 检查路径是否正确（Windows用反斜杠 `\`）
+1. 检查当前batch_size（建议从16开始）
+2. 启用AMP混合精度：`training.amp_enabled: true`
+3. 使用梯度累积：`training.grad_accum_steps: 2`
+4. 降低image_size：`data.image_size: [128, 128]`
 
----
+**修改配置示例：**
+```yaml
+data:
+  batch_size: 8          # 从32降到8
 
-### 5.3 训练不收敛
-
-**现象：** Loss不下降，Acc一直是0
-
-**可能原因：**
-1. **学习率过大**：改为0.0001
-2. **数据问题**：检查标签是否正确
-3. **模型问题**：检查模型输出形状
-
-**调试方法：**
-```bash
-# 运行debug模式，快速检查
-python train.py --config configs/e0_debug.yaml
+training:
+  amp_enabled: true      # 启用混合精度
+  grad_accum_steps: 2    # 梯度累积
 ```
 
----
+#### 问题：CUDA not available
 
-### 5.4 依赖问题
+**症状：**
+```python
+>>> torch.cuda.is_available()
+False
+```
 
-**问题：ModuleNotFoundError: No module named 'xxx'**
+**排查步骤：**
+1. 检查NVIDIA驱动：`nvidia-smi`
+2. 检查PyTorch CUDA版本：`python -c "import torch; print(torch.version.cuda)"`
+3. 重新安装PyTorch：
+   ```bash
+   pip uninstall torch torchvision -y
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+   ```
+
+### 5.2 依赖相关
+
+#### 问题：ModuleNotFoundError
+
+**症状：**
+```
+ModuleNotFoundError: No module named 'xxx'
+```
 
 **解决：**
 ```bash
@@ -289,9 +349,54 @@ pip install xxx
 ```
 
 **常见缺失包：**
-- `pip install opencv-python`
-- `pip install pyyaml`
-- `pip install tqdm`
+```bash
+pip install opencv-python pyyaml tqdm hypothesis python-pptx
+```
+
+#### 问题：版本冲突
+
+**解决：**
+```bash
+pip install -r requirements.txt --force-reinstall
+```
+
+### 5.3 路径相关
+
+#### 问题：FileNotFoundError
+
+**症状：**
+```
+FileNotFoundError: [Errno 2] No such file or directory: 'data/processed/Images/...'
+```
+
+**排查步骤：**
+1. 检查数据是否准备完成：
+   ```bash
+   dir data\processed\Images
+   ```
+2. 重新运行数据准备脚本
+3. 检查配置文件中的 `data_root` 路径
+
+### 5.4 显存不足排查步骤
+
+**按优先级尝试：**
+
+| 步骤 | 操作 | 配置修改 |
+|------|------|----------|
+| 1 | 降低batch_size | `data.batch_size: 8` |
+| 2 | 启用AMP | `training.amp_enabled: true` |
+| 3 | 使用梯度累积 | `training.grad_accum_steps: 2` |
+| 4 | 降低图像尺寸 | `data.image_size: [128, 128]` |
+| 5 | 减少num_workers | `data.num_workers: 0` |
+
+### 5.5 训练不收敛
+
+**现象：** Loss不下降，Acc一直是0
+
+**可能原因及解决：**
+1. **学习率过大**：改为 `learning_rate: 0.0001`
+2. **数据问题**：运行 `python scripts/sanity_check_data.py`
+3. **模型问题**：先用debug模式验证
 
 ---
 
@@ -299,81 +404,105 @@ pip install xxx
 
 ### 6.1 评估指标
 
-**Accuracy（准确率）**
-- **定义**：预测正确的样本数 / 总样本数
-- **范围**：0-1（越高越好）
-- **问题**：类别不平衡时会误导（如99%都是正常，模型全预测正常也有99%准确率）
+#### Macro-F1（主指标）
 
-**Macro-F1（宏平均F1）**
-- **定义**：每个类别F1分数的平均值
-- **优点**：对类别不平衡敏感，是本实验的主指标
-- **计算**：
-  ```
-  F1 = 2 × (Precision × Recall) / (Precision + Recall)
-  Macro-F1 = (F1_class0 + F1_class1 + ... + F1_class37) / 38
-  ```
+**定义：** 各类别F1分数的算术平均
 
-**Dice系数（分割指标）**
-- **定义**：预测mask与真实mask的重叠度
-- **范围**：0-1（越高越好）
-- **计算**：
-  ```
-  Dice = 2 × |预测 ∩ 真实| / (|预测| + |真实|)
-  ```
+**公式：**
+```
+Precision = TP / (TP + FP)
+Recall = TP / (TP + FN)
+F1 = 2 × (Precision × Recall) / (Precision + Recall)
+Macro-F1 = (1/N) × Σ F1_i
+```
 
-**IoU（交并比）**
-- **定义**：预测mask与真实mask的交集/并集
-- **范围**：0-1（越高越好）
-- **关系**：Dice = 2×IoU / (1+IoU)
+**特点：**
+- 对类别不平衡敏感
+- 每个类别权重相同
+- 范围：0-1（越高越好）
 
----
+#### Dice系数（分割指标）
+
+**定义：** 预测mask与真实mask的重叠度
+
+**公式：**
+```
+Dice = 2 × |A ∩ B| / (|A| + |B|)
+```
+
+**特点：**
+- 范围：0-1（越高越好）
+- 对小目标敏感
+
+#### IoU（交并比）
+
+**定义：** 预测mask与真实mask的交集/并集
+
+**公式：**
+```
+IoU = |A ∩ B| / |A ∪ B|
+```
+
+**与Dice的关系：**
+```
+Dice = 2 × IoU / (1 + IoU)
+```
+
+#### mAP（多标签指标）
+
+**定义：** 各类别Average Precision的平均值
+
+**使用场景：** 8类多标签分类
 
 ### 6.2 深度学习术语
 
-**Epoch（轮次）**
-- 模型看完整个训练集一遍
-
-**Batch（批次）**
-- 一次前向传播处理的样本数
-- batch_size=32：每次处理32张图像
-
-**Learning Rate（学习率）**
-- 参数更新的步长
-- 太大：不收敛，震荡
-- 太小：收敛慢
-
-**Loss（损失）**
-- 模型预测与真实值的差距
-- 训练目标：最小化loss
-
-**Overfitting（过拟合）**
-- 训练集表现好，验证集表现差
-- 原因：模型记住了训练数据，没有学到通用规律
-- 解决：数据增强、Dropout、Early Stopping
-
----
+| 术语 | 解释 |
+|------|------|
+| Epoch | 模型看完整个训练集一遍 |
+| Batch | 一次前向传播处理的样本数 |
+| Learning Rate | 参数更新的步长 |
+| Loss | 模型预测与真实值的差距 |
+| Overfitting | 训练集好、验证集差 |
+| Underfitting | 训练集和验证集都差 |
 
 ### 6.3 本实验特有概念
 
-**多任务学习（Multi-Task Learning）**
-- 同时训练分类和分割两个任务
-- 共享编码器，分别有分类头和分割头
-- 优点：特征共享，提升泛化能力
+#### 对比学习（Contrastive Learning）
 
-**混合精度训练（AMP）**
-- 部分计算用fp16（半精度），部分用fp32（单精度）
-- 优点：节省显存，加速训练
-- 注意：某些操作（如BCE）需要特殊处理
+**原理：** 通过拉近相似样本、推远不相似样本来学习表征
 
-**长尾分布（Long-Tail）**
-- 数据集中某些类别样本很少（如NF类只有149个）
-- 问题：模型偏向多数类
-- 解决：Focal Loss、Class-Balanced Loss、数据增强
+**本项目应用：** SimCLR风格的自监督预训练（E1）
 
-**弱监督学习（Weakly-Supervised）**
-- 只有图像级标签（如"有Center缺陷"），没有像素级标签
-- 任务：预测每个像素属于哪种缺陷
-- 方法：CAM、原型学习、注意力机制
+**数据增强要求：** 晶圆友好（旋转、翻转），避免大裁剪
+
+#### 长尾分布（Long-Tail）
+
+**定义：** 少数类别样本数远少于多数类别
+
+**本项目情况：** 某些混合缺陷类只有几十个样本
+
+**解决方案（E2）：**
+- 类均衡采样（WeightedRandomSampler）
+- Focal Loss
+- Class-Balanced Loss
+
+#### 弱监督（Weak Supervision）
+
+**定义：** 使用不完整或噪声标签进行训练
+
+**本项目应用（E3）：**
+- 只有图像级标签（"有Center缺陷"）
+- 没有像素级标签
+- 使用原型相似度生成分离热力图
+
+#### 多任务学习（Multi-Task Learning）
+
+**原理：** 同时训练多个相关任务，共享特征表示
+
+**本项目任务：**
+- T1：38类分类
+- T2：二值分割
+- T3：8通道成分分离
 
 ---
 
@@ -384,151 +513,191 @@ pip install xxx
 ```
 Epoch 1/100
 Training: 100%|██████████| 152/152 [00:45<00:00, 3.37it/s, loss=4.15, acc=0.046, dice=0.629]
-Validating: 100%|██████████| 19/19 [00:02<00:00, 9.12it/s, loss=4.29, acc=0.000, dice=0.690]
+Validating: 100%|██████████| 19/19 [00:02<00:00, 9.12it/s]
 Train - Loss: 4.1537, Acc: 0.0461, Dice: 0.6291
 Val - Loss: 4.2863, Acc: 0.0000, Dice: 0.6902, Macro-F1: 0.0000
+Saved best model (macro_f1: 0.0000)
 ```
 
 ### 7.2 关键信息解读
 
-**进度条：**
-- `152/152`：处理了152个batch
-- `3.37it/s`：每秒处理3.37个batch
-- `00:45`：本epoch用时45秒
-
-**实时指标：**
-- `loss=4.15`：当前batch的损失
-- `acc=0.046`：当前batch的分类准确率（4.6%）
-- `dice=0.629`：当前batch的分割Dice系数（62.9%）
-
-**Epoch总结：**
-- `Train - Loss: 4.15`：训练集平均损失
-- `Val - Loss: 4.29`：验证集平均损失
-- `Macro-F1: 0.0000`：验证集宏平均F1（主指标）
+| 信息 | 含义 |
+|------|------|
+| `152/152` | 处理了152个batch |
+| `3.37it/s` | 每秒处理3.37个batch |
+| `00:45` | 本epoch用时45秒 |
+| `loss=4.15` | 当前batch的损失 |
+| `Macro-F1: 0.0000` | 验证集宏平均F1（主指标） |
 
 ### 7.3 判断训练是否正常
 
-**✅ 正常训练的特征：**
-1. Loss逐渐下降
-2. Acc/Dice逐渐上升
-3. Train和Val指标差距不大（<10%）
+#### ✅ 正常训练特征
 
-**❌ 异常情况：**
-
-**情况1：Loss不下降**
 ```
-Epoch 1: Loss=4.15
-Epoch 2: Loss=4.14
-Epoch 3: Loss=4.16
-...
+Epoch 1:  Loss=4.15, Macro-F1=0.05
+Epoch 10: Loss=2.50, Macro-F1=0.35
+Epoch 50: Loss=1.20, Macro-F1=0.65
+Epoch 100: Loss=0.80, Macro-F1=0.75
 ```
-- **原因**：学习率过大或过小、数据问题
-- **解决**：调整学习率、检查数据
 
-**情况2：过拟合**
+- Loss逐渐下降
+- Macro-F1逐渐上升
+- Train和Val指标差距不大（<10%）
+
+#### ❌ 过拟合
+
 ```
 Epoch 50: Train Loss=0.5, Val Loss=3.2
 Epoch 51: Train Loss=0.4, Val Loss=3.5
 ```
-- **特征**：Train Loss很低，Val Loss很高
-- **解决**：Early Stopping、数据增强、Dropout
 
-**情况3：欠拟合**
+**特征：** Train Loss很低，Val Loss很高或上升
+
+**解决：**
+- Early Stopping
+- 数据增强
+- Dropout
+
+#### ❌ 欠拟合
+
 ```
 Epoch 100: Train Loss=3.8, Val Loss=3.9
 ```
-- **特征**：Train Loss和Val Loss都很高
-- **解决**：增加模型容量、训练更多epoch
+
+**特征：** Train Loss和Val Loss都很高
+
+**解决：**
+- 增加模型容量
+- 训练更多epoch
+- 调整学习率
+
+#### ❌ Loss不下降
+
+```
+Epoch 1: Loss=4.15
+Epoch 2: Loss=4.14
+Epoch 3: Loss=4.16
+```
+
+**可能原因：**
+- 学习率过大或过小
+- 数据问题
+- 模型问题
+
+**解决：** 先用debug模式验证
 
 ---
 
-## 8. 实验流程总结
+## 8. 问题处理原则
 
-### 8.1 完整流程（5步走）
+### 8.1 核心原则
 
-```bash
-# 步骤1：激活环境
-conda activate wafer-seg-class
+当遇到问题时，遵循以下原则：
 
-# 步骤2：准备数据（debug模式）
-python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug
+1. **记录假设**：明确说明你认为问题的原因
+2. **给出备选方案**：提供至少2-3个可能的解决方案
+3. **默认保守实现**：选择最稳定、最简单的方案
 
-# 步骤3：验证数据
-python scripts/sanity_check_data.py --data_root data/processed
+### 8.2 示例：显存不足
 
-# 步骤4：训练模型（debug模式）
-python train.py --config configs/e0_debug.yaml
+**假设：** batch_size=32对于12GB显存可能过大
 
-# 步骤5：评估模型
-python eval.py --config configs/e0_debug.yaml --ckpt results/e0_debug_debug/checkpoints/last.pt
-```
+**备选方案：**
+1. 降低batch_size到16或8
+2. 启用AMP混合精度
+3. 使用梯度累积
+4. 降低图像尺寸
 
-### 8.2 从Debug到完整训练
+**保守实现：** 先降低batch_size到8，这是最简单且最可靠的方案
 
-**Debug模式（5分钟）：**
-- 目的：快速验证流程
-- 数据：每类5个样本
-- Epoch：2
-- 输出：`results/e0_debug_debug/`
+### 8.3 示例：SSL预训练数据不可用
 
-**完整训练（30-60分钟）：**
-- 目的：获得最佳性能
-- 数据：全部38015个样本
-- Epoch：100
-- 输出：`results/e0/`
+**假设：** WM-811K数据集可能无法获取
 
-**命令对比：**
-```bash
-# Debug
-python train.py --config configs/e0_debug.yaml
+**备选方案：**
+1. 使用MixedWM38训练集作为SSL数据源
+2. 跳过SSL预训练，直接使用随机初始化
+3. 使用公开的预训练权重
 
-# 完整
-python train.py --config configs/e0.yaml
-```
+**保守实现：** 使用MixedWM38训练集，这样不需要额外数据
+
+### 8.4 示例：分离头实现复杂
+
+**假设：** 完整的弱监督分离训练可能过于复杂
+
+**备选方案：**
+1. 实现完整的弱监督训练
+2. 使用原型相似度方法（不需要额外训练）
+3. 使用CAM方法
+
+**保守实现：** 使用原型相似度方法，在eval阶段生成分离热力图
 
 ---
 
-## 9. 下一步学习
+## 9. 实验结果验证清单
 
-### 9.1 实验进度
+### 9.1 E0 基线验证
 
-- ✅ Phase 0: 环境配置
-- ✅ Phase 1: 数据准备 + Debug训练
-- ⏳ Phase 2: E0完整训练
-- ⏳ Phase 3: E1 SSL预训练
-- ⏳ Phase 4: E2 长尾增强
-- ⏳ Phase 5: E3 成分分离
-- ⏳ Phase 6: 报告 + PPT
+- [ ] `results/e0/metrics.csv` 存在且包含 Macro-F1, Dice, IoU
+- [ ] `results/e0/confusion_matrix.png` 存在
+- [ ] `results/e0/seg_overlays/` 包含至少10张图片
+- [ ] `results/e0/config_snapshot.yaml` 存在
+- [ ] `results/e0/meta.json` 包含 git_commit 和 seed
 
-### 9.2 推荐阅读
+### 9.2 E1 SSL验证
 
-**深度学习基础：**
-- 《动手学深度学习》（李沐）
-- PyTorch官方教程
+- [ ] `results/e1/weight_loading.json` 存在
+- [ ] weight_loading.json 包含 matched, missing, unexpected 字段
+- [ ] E1的Macro-F1应该 >= E0（SSL应该有帮助）
 
-**计算机视觉：**
-- U-Net论文（分割经典）
-- ResNet论文（残差网络）
+### 9.3 E2 长尾验证
 
-**本实验相关：**
-- WaferMap论文（晶圆缺陷检测）
-- Multi-Task Learning综述
+- [ ] `results/e2_debug/tail_class_analysis.csv` 存在
+- [ ] 尾部类别的F1应该有所提升
+
+### 9.4 E3 分离验证
+
+- [ ] `results/e3/separation_maps/` 存在
+- [ ] 包含8通道热力图可视化
+- [ ] `results/e3/prototypes.pt` 存在
+
+### 9.5 报告验证
+
+- [ ] `results/comparison.csv` 包含E0/E1/E2/E3对比
+- [ ] `report/REPORT.md` 包含完整实验报告
+- [ ] `slides/SLIDES.md` 包含10-12页PPT大纲
+- [ ] `slides/final.pptx` 存在（可选）
 
 ---
 
 ## 10. 获取帮助
 
-**遇到问题时：**
+### 10.1 遇到问题时
 
 1. **查看日志**：`results/<exp_name>/train.log`
 2. **检查配置**：`configs/<exp_name>.yaml`
 3. **运行debug**：快速定位问题
 4. **查看本指南**：常见问题章节
 
-**记住：**
+### 10.2 调试技巧
+
+```bash
+# 快速验证流程
+python train.py --config configs/e0.yaml --debug
+
+# 检查数据
+python scripts/sanity_check_data.py --data_root data/processed
+
+# 验证环境
+python scripts/verify_setup.py
+```
+
+### 10.3 记住
+
 - 深度学习是实验科学，多试多调
 - 每次只改一个参数，观察效果
 - 保存好的checkpoint，避免重复训练
+- 遇到问题先用debug模式验证
 
 ---
 

@@ -3,10 +3,17 @@
 """
 统一训练入口
 
+支持:
+- --config: 配置文件路径
+- --debug: Debug 模式（每类最多5样本，epochs=2）
+- --resume: 断点续训检查点路径
+
 Usage:
     python train.py --config configs/e0.yaml
     python train.py --config configs/e0.yaml --debug
     python train.py --config configs/e0.yaml --resume results/e0/checkpoints/last.pt
+
+Requirements: 7.1, 7.2
 """
 
 import argparse
@@ -31,9 +38,11 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from config_schema import load_config, save_config, ExperimentConfig
-from data.dataset import get_dataloaders
+from data.dataset import MixedWM38Dataset
+from data.dataloader import get_dataloaders
+from data.sampler import get_tail_class_indices
 from models.multitask import create_model
-from models.losses import MultiTaskLoss
+from models.losses import MultiTaskLoss, create_loss_from_config
 
 
 def setup_logging(log_dir: str, name: str = "train"):
@@ -159,10 +168,10 @@ def train_epoch(
     for batch_idx, batch in enumerate(pbar):
         # 移动数据到设备
         images = batch['image'].to(device)
+        # 使用 cls_label 和 seg_mask 作为 key（与 MultiTaskLoss 一致）
         targets = {
-            'label': batch['label'].to(device),
-            'mask': batch['mask'].to(device),
-            'label_8': batch['label_8'].to(device),
+            'cls_label': batch['label'].to(device),
+            'seg_mask': batch['mask'].to(device),
         }
         
         # 前向传播
@@ -182,12 +191,13 @@ def train_epoch(
         
         # 计算指标
         with torch.no_grad():
-            metrics = compute_metrics(outputs, targets)
+            # 使用原始 batch 数据计算指标
+            metrics = compute_metrics(outputs, {'label': batch['label'].to(device), 'mask': batch['mask'].to(device)})
         
         # 累积统计
         total_loss += losses['total'].item()
-        total_cls_loss += losses['cls'].item()
-        total_seg_loss += losses['seg'].item()
+        total_cls_loss += losses.get('cls', torch.tensor(0.0)).item()
+        total_seg_loss += losses.get('seg', torch.tensor(0.0)).item()
         total_accuracy += metrics['accuracy']
         total_dice += metrics['dice']
         num_batches += 1
@@ -230,17 +240,18 @@ def validate(
     pbar = tqdm(dataloader, desc="Validating")
     for batch in pbar:
         images = batch['image'].to(device)
+        # 使用 cls_label 和 seg_mask 作为 key（与 MultiTaskLoss 一致）
         targets = {
-            'label': batch['label'].to(device),
-            'mask': batch['mask'].to(device),
-            'label_8': batch['label_8'].to(device),
+            'cls_label': batch['label'].to(device),
+            'seg_mask': batch['mask'].to(device),
         }
         
         with autocast(enabled=amp_enabled):
             outputs = model(images)
             losses = criterion(outputs, targets)
         
-        metrics = compute_metrics(outputs, targets)
+        # 使用原始 batch 数据计算指标
+        metrics = compute_metrics(outputs, {'label': batch['label'].to(device), 'mask': batch['mask'].to(device)})
         
         total_loss += losses['total'].item()
         total_accuracy += metrics['accuracy']
@@ -249,7 +260,7 @@ def validate(
         
         # 收集预测结果（用于计算 Macro-F1）
         all_preds.extend(outputs['cls_logits'].argmax(dim=1).cpu().numpy())
-        all_labels.extend(targets['label'].cpu().numpy())
+        all_labels.extend(batch['label'].cpu().numpy())
         
         pbar.set_postfix({
             'loss': f"{total_loss / num_batches:.4f}",
@@ -372,6 +383,16 @@ def main():
     
     logger.info(f"Epochs: {epochs}, Batch size: {batch_size}")
     
+    # 获取 sampler 配置
+    sampler_mode = getattr(config.data, 'sampler', 'uniform')
+    sampler_beta = getattr(config.data, 'sampler_beta', 0.9999)
+    
+    # uniform 和 none 表示不使用加权采样
+    if sampler_mode in ['uniform', 'none', None]:
+        sampler_mode = None
+    
+    logger.info(f"Sampler mode: {sampler_mode or 'uniform (no weighted sampling)'}")
+    
     # 创建数据加载器
     logger.info("Creating data loaders...")
     train_loader, val_loader, test_loader = get_dataloaders(
@@ -381,12 +402,43 @@ def main():
         classification_mode=config.data.classification_mode,
         debug=config.debug,
         max_per_class=max_per_class or 5,
+        sampler_mode=sampler_mode,
+        sampler_beta=sampler_beta,
     )
     logger.info(f"Train samples: {len(train_loader.dataset)}")
     logger.info(f"Val samples: {len(val_loader.dataset)}")
     
+    # 获取类别统计（用于 class_balanced loss 和 tail_class_analysis）
+    train_dataset = train_loader.dataset
+    class_counts = train_dataset.get_class_counts()
+    num_per_class = [class_counts.get(i, 0) for i in range(config.model.classification_classes)]
+    
+    # 记录类别分布
+    non_zero_classes = sum(1 for c in num_per_class if c > 0)
+    min_samples = min(c for c in num_per_class if c > 0) if non_zero_classes > 0 else 0
+    max_samples = max(num_per_class)
+    logger.info(f"Class distribution: {non_zero_classes} non-zero classes")
+    logger.info(f"  Min samples per class: {min_samples}")
+    logger.info(f"  Max samples per class: {max_samples}")
+    logger.info(f"  Imbalance ratio: {max_samples / max(min_samples, 1):.2f}")
+    
+    # 识别尾部类别
+    tail_threshold = getattr(config.data, 'tail_class_threshold', 10)
+    tail_classes = get_tail_class_indices(np.array(num_per_class), threshold=tail_threshold)
+    logger.info(f"Tail classes (< {tail_threshold} samples): {len(tail_classes)} classes")
+    
     # 创建模型
     logger.info("Creating model...")
+    
+    # 准备 key_mapping 字典
+    key_mapping = None
+    if hasattr(config.model, 'key_mapping') and config.model.key_mapping is not None:
+        key_mapping = {
+            'extract_subtree': config.model.key_mapping.extract_subtree,
+            'strip_prefix': config.model.key_mapping.strip_prefix,
+            'use_encoder_state_dict': config.model.key_mapping.use_encoder_state_dict,
+        }
+    
     model = create_model(
         encoder=config.model.encoder,
         classification_classes=config.model.classification_classes,
@@ -394,6 +446,7 @@ def main():
         separation_enabled=config.model.separation_enabled,
         separation_channels=config.model.separation_channels,
         pretrained_weights=config.model.pretrained_weights,
+        key_mapping=key_mapping,
         output_dir=str(output_dir),
     )
     model = model.to(device)
@@ -404,13 +457,11 @@ def main():
     logger.info(f"Total parameters: {total_params:,}")
     logger.info(f"Trainable parameters: {trainable_params:,}")
     
-    # 创建损失函数
-    criterion = MultiTaskLoss(
-        classification_loss=config.loss.classification,
-        segmentation_loss=config.loss.segmentation,
-        separation_loss=config.loss.separation,
-        weights=tuple(config.loss.weights),
-        focal_gamma=config.loss.focal_gamma,
+    # 创建损失函数（传入类别统计用于 class_balanced loss）
+    criterion = create_loss_from_config(
+        loss_config=config.loss,
+        num_classes=config.model.classification_classes,
+        num_per_class=num_per_class,
     )
     
     # 创建优化器和调度器
@@ -521,7 +572,9 @@ def main():
         
         # 保存最佳检查点
         current_metric = val_metrics.get(config.training.checkpoint_metric, val_metrics['macro_f1'])
-        if current_metric > best_metric:
+        # 使用 >= 确保第一个 epoch 也能保存 best checkpoint
+        is_first_epoch = (epoch == start_epoch)
+        if current_metric > best_metric or (is_first_epoch and current_metric >= best_metric):
             best_metric = current_metric
             save_checkpoint(
                 model, optimizer, scheduler, scaler, epoch + 1, val_metrics,
@@ -536,10 +589,34 @@ def main():
     with open(output_dir / "history.json", 'w') as f:
         json.dump(history, f, indent=2)
     
+    # 保存类别统计信息（用于后续分析）
+    class_stats = {
+        'num_per_class': num_per_class,
+        'tail_classes': tail_classes,
+        'tail_threshold': tail_threshold,
+        'sampler_mode': sampler_mode,
+    }
+    with open(output_dir / "class_stats.json", 'w') as f:
+        json.dump(class_stats, f, indent=2)
+    
     # Debug 模式下自动运行评估
     if config.debug:
         logger.info("\nRunning evaluation in debug mode...")
-        os.system(f"python eval.py --config {args.config} --ckpt {checkpoint_dir / 'best.pt'} --debug")
+        best_ckpt = checkpoint_dir / 'best.pt'
+        if best_ckpt.exists():
+            # 使用 subprocess 确保使用相同的 Python 解释器
+            eval_args = [
+                sys.executable, 'eval.py',
+                '--config', args.config,
+                '--ckpt', str(best_ckpt),
+                '--debug'
+            ]
+            logger.info(f"Running: {' '.join(eval_args)}")
+            ret = subprocess.run(eval_args)
+            if ret.returncode != 0:
+                logger.warning(f"Evaluation returned non-zero exit code: {ret.returncode}")
+        else:
+            logger.warning(f"Best checkpoint not found at {best_ckpt}, skipping evaluation")
     
     return 0
 

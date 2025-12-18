@@ -1,0 +1,34 @@
+experiment:
+  name: ssl_debug
+  seed: 42
+  debug: true
+data:
+  dataset: MixedWM38
+  data_root: data/processed
+  wm811k_path: null
+  image_size:
+  - 224
+  - 224
+  batch_size: 8
+  num_workers: 0
+  max_samples: 100
+  debug_batch_size: 8
+  debug_max_samples: 100
+model:
+  encoder: custom
+  in_channels: 3
+  base_channels: 8
+  projection_dim: 128
+  hidden_dim: 256
+training:
+  epochs: 2
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.01
+  scheduler: cosine
+  amp_enabled: true
+  temperature: 0.5
+  debug_epochs: 2
+output:
+  results_dir: results
+  save_every: 1
