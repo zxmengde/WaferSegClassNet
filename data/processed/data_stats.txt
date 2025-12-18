@@ -1,0 +1,45 @@
+MixedWM38 Data Statistics
+==================================================
+Total samples: 190
+Debug mode: True
+Image size: (224, 224)
+
+Label distribution:
+  Normal: 1000
+  Center: 1000
+  Donut: 1000
+  EL: 1000
+  ER: 1000
+  LOC: 1000
+  NF: 149
+  S: 1000
+  Random: 866
+  C+EL: 1000
+  C+ER: 1000
+  C+L: 1000
+  C+S: 1000
+  D+EL: 1000
+  D+ER: 1000
+  D+L: 1000
+  D+S: 1000
+  EL+L: 1000
+  EL+S: 1000
+  ER+L: 1000
+  ER+S: 1000
+  L+S: 1000
+  C+EL+L: 1000
+  C+EL+S: 2000
+  C+ER+L: 1000
+  C+ER+S: 1000
+  C+L+S: 1000
+  D+EL+L: 1000
+  D+EL+S: 1000
+  D+ER+L: 1000
+  D+ER+S: 1000
+  D+L+S: 1000
+  EL+L+S: 1000
+  ER+L+S: 1000
+  C+L+EL+S: 1000
+  C+L+ER+S: 1000
+  D+L+EL+S: 1000
+  D+L+ER+S: 1000

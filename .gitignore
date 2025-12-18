@@ -1,0 +1,137 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================
+# Project-specific ignores
+# ============================================
+
+# Data files (do not commit raw/processed data)
+data/raw/*.npz
+data/raw/*.zip
+data/raw/*.tar.gz
+data/raw/*.h5
+data/processed/Images/
+data/processed/Labels/
+data/processed/Masks/
+
+# Model checkpoints and weights
+results/*/checkpoints/
+weights/*.pt
+weights/*.pth
+weights/*.ckpt
+*.pt
+*.pth
+*.ckpt
+
+# Experiment outputs (keep structure, ignore large files)
+results/*/seg_overlays/
+results/*/separation_maps/
+results/*/pseudo_mask_samples/
+results/*/*.png
+results/*/*.jpg
+
+# Logs
+logs/*.log
+*.log
+tensorboard_logs/
+
+# Generated reports (optional - may want to keep)
+# report/REPORT.md
+# slides/SLIDES.md
+slides/*.pptx
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Large model files
+*.bin
+*.safetensors
