@@ -22,6 +22,13 @@ data/
 │   │   └── ...
 │   └── data_stats.txt            # 数据统计信息
 │
+├── synthetic/                    # DDPM 合成数据（不提交到git）
+│   └── ddpm/
+│       ├── Images/               # 合成RGB晶圆图像 (.npy)
+│       ├── Labels/               # 合成标签 (.npy, 8维)
+│       ├── Masks/                # 合成mask (.npy)
+│       └── synthetic_stats.json  # 合成统计信息
+│
 └── README.md                     # 数据说明
 ```
 
@@ -56,15 +63,15 @@ MixedWM38 是一个混合缺陷晶圆图谱数据集，包含：
 2. **运行数据准备脚本**：
    ```bash
    # 完整数据
-   python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed
+   conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed
    
    # Debug 模式（每类最多5样本）
-   python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug
+   conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug
    ```
 
 3. **验证数据完整性**：
    ```bash
-   python scripts/sanity_check_data.py --data_root data/processed
+   conda run -n wafer-seg-class python scripts/sanity_check_data.py --data_root data/processed
    ```
 
 ## 数据格式说明
@@ -95,13 +102,27 @@ MixedWM38 是一个混合缺陷晶圆图谱数据集，包含：
 - 数据类型：uint8
 - 值：0（非缺陷）或 255（缺陷）
 
+### Synthetic (DDPM 合成数据)
+
+- 目录结构与 `processed/` 一致
+- `synthetic_stats.json` 记录合成数量、目标阈值与生成配置
+- 合成样本仅用于训练集（E2）
+
 ## WM-811K 数据集（可选，用于 SSL 预训练）
 
 如果需要使用 WM-811K 进行自监督预训练：
 
 1. 下载 WM-811K 数据集
-2. 放置到 `data/wm811k/` 目录
-3. 运行预处理脚本（待实现）
+2. 放置到 `data/raw/MIR-WM811K/` 目录（确保包含 `Python/WM811K.pkl`）
+3. 运行预处理脚本：
+
+```bash
+conda run -n wafer-seg-class python scripts/prepare_wm811k.py --input data/raw/MIR-WM811K/Python/WM811K.pkl --output data/wm811k
+```
+
+输出目录：
+- `data/wm811k/Images/`（RGB .npy）
+- `data/wm811k/metadata.csv`
 
 **注意**：如果 WM-811K 不可用，系统会自动使用 MixedWM38 的训练图像作为 SSL 数据源。
 
@@ -114,6 +135,7 @@ MixedWM38 是一个混合缺陷晶圆图谱数据集，包含：
 data/raw/
 data/processed/
 data/wm811k/
+data/synthetic/
 *.npz
 *.npy
 ```
@@ -124,12 +146,12 @@ data/wm811k/
 
 A: 可以使用 debug 模式先跑通流程：
 ```bash
-python scripts/prepare_mixedwm38.py --debug --max-per-class 5
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --debug --max-per-class 5
 ```
 
 ### Q: 标签分布不均衡怎么办？
 
-A: 这是正常的长尾分布。E2 实验会使用加权采样和 Focal Loss 来处理。
+A: 这是正常的长尾分布。当前 E2 使用 DDPM 生成式尾部增强，必要时可叠加加权采样或 Focal Loss。
 
 ### Q: 没有真实的分割 mask 怎么办？
 

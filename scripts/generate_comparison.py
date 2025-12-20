@@ -5,7 +5,7 @@
 汇总E0/E1/E2/E3的metrics.csv，计算delta，输出comparison.csv
 
 用法:
-    python scripts/generate_comparison.py --results_root results --out results/comparison.csv
+    conda run -n wafer-seg-class python scripts/generate_comparison.py --results_root results --out results/comparison.csv
 """
 
 import argparse
@@ -220,8 +220,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-    python scripts/generate_comparison.py --results_root results --out results/comparison.csv
-    python scripts/generate_comparison.py --results_root results --experiments e0 e1 --baseline e0
+    conda run -n wafer-seg-class python scripts/generate_comparison.py --results_root results --out results/comparison.csv
+    conda run -n wafer-seg-class python scripts/generate_comparison.py --results_root results --experiments e0 e1 --baseline e0
         """
     )
     

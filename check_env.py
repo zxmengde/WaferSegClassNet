@@ -143,13 +143,13 @@ def main():
     if all_ok:
         print("✅ 环境检查通过！可以开始训练。")
         print("\n下一步:")
-        print("  1. 准备数据: python scripts/prepare_mixedwm38.py")
-        print("  2. Debug训练: python train.py --config configs/e0_debug.yaml")
+        print("  1. 准备数据: conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py")
+        print("  2. Debug训练: conda run -n wafer-seg-class python train.py --config configs/e0_debug.yaml")
     else:
         print("⚠️ 部分检查未通过，请查看上方详情。")
         print("\n排查建议:")
-        print("  1. 确保已激活正确的 conda 环境: conda activate wafer-seg-class")
-        print("  2. 重新安装依赖: pip install -r requirements.txt")
+        print("  1. 使用统一命令前缀: conda run -n wafer-seg-class")
+        print("  2. 重新安装依赖: conda run -n wafer-seg-class pip install -r requirements.txt")
         print("  3. 查看文档: docs/SETUP_WINDOWS.md")
     print("=" * 50)
     

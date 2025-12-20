@@ -42,21 +42,20 @@ conda env create -f environment.yml
 
 # 方法 B：手动创建
 conda create -n wafer-seg-class python=3.10 -y
-conda activate wafer-seg-class
-conda install pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia -y
-pip install -r requirements.txt
+conda install -n wafer-seg-class pytorch torchvision pytorch-cuda=12.1 -c pytorch -c nvidia -y
+conda run -n wafer-seg-class pip install -r requirements.txt
 ```
 
 ### 4. 激活环境
 
 ```bash
-conda activate wafer-seg-class
+# 无需手动激活，后续命令统一使用 conda run -n wafer-seg-class
 ```
 
 ### 5. 验证安装
 
 ```bash
-python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
+conda run -n wafer-seg-class python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
 ```
 
 预期输出：
@@ -66,31 +65,10 @@ CUDA available: True
 GPU: NVIDIA GeForce RTX 4070 SUPER
 ```
 
-## 方法二：使用 pip + venv
+## 方法二：使用 pip + venv（不推荐）
 
-### 1. 安装 Python 3.10
-
-1. 下载 Python 3.10：https://www.python.org/downloads/
-2. 运行安装程序，勾选"Add Python to PATH"
-
-### 2. 创建虚拟环境
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. 安装 PyTorch（CUDA 12.1）
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-```
-
-### 4. 安装其他依赖
-
-```bash
-pip install -r requirements.txt
-```
+本项目统一使用 `conda run -n wafer-seg-class` 方式执行命令，以保证环境一致性。
+如必须使用 venv，请自行调整命令与依赖版本，当前文档不提供该模式的详细步骤。
 
 ## CUDA 版本检查
 
@@ -128,8 +106,8 @@ https://developer.nvidia.com/cuda-downloads
    ```
 3. 重新安装 PyTorch：
    ```bash
-   pip uninstall torch torchvision
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+   conda run -n wafer-seg-class pip uninstall torch torchvision
+   conda run -n wafer-seg-class pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
    ```
 
 ### 问题 2：ModuleNotFoundError
@@ -138,7 +116,7 @@ https://developer.nvidia.com/cuda-downloads
 
 **解决方案**：
 1. 确认虚拟环境已激活
-2. 重新安装依赖：`pip install -r requirements.txt`
+2. 重新安装依赖：`conda run -n wafer-seg-class pip install -r requirements.txt`
 
 ### 问题 3：CUDA out of memory
 
@@ -157,13 +135,13 @@ https://developer.nvidia.com/cuda-downloads
 **解决方案**：使用国内镜像源
 
 ```bash
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+conda run -n wafer-seg-class pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 或配置永久镜像源：
 
 ```bash
-pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+conda run -n wafer-seg-class pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ### 问题 5：conda 环境创建失败
@@ -178,7 +156,7 @@ pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 运行以下命令验证所有依赖：
 
 ```bash
-python -c "
+conda run -n wafer-seg-class python -c "
 import torch
 import torchvision
 import numpy as np

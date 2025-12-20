@@ -1,7 +1,7 @@
 MixedWM38 Data Statistics
 ==================================================
-Total samples: 190
-Debug mode: True
+Total samples: 38015
+Debug mode: False
 Image size: (224, 224)
 
 Label distribution:

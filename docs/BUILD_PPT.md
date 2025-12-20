@@ -22,7 +22,7 @@
 PPT生成需要 `python-pptx` 库：
 
 ```bash
-pip install python-pptx
+conda run -n wafer-seg-class pip install python-pptx
 ```
 
 ### 1.2 实验结果
@@ -38,9 +38,12 @@ results/
 ├── e1/
 │   ├── metrics.csv
 │   └── weight_loading.json
-├── e2_debug/
+├── e2/
 │   ├── metrics.csv
 │   └── tail_class_analysis.csv
+└── ddpm_tail/
+    ├── config_snapshot.yaml
+    └── history.json
 └── e3/
     ├── metrics.csv
     └── separation_maps/
@@ -54,16 +57,16 @@ results/
 
 ```bash
 # 步骤1：生成PPT大纲（Markdown格式）
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 步骤2：生成PPT文件
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 ```
 
 ### 预期输出
 
 ```
-[INFO] 解析到 13 页幻灯片
+[INFO] 解析到 12 页幻灯片
 [INFO] 处理第 1 页: 封面
 [INFO] 处理第 2 页: 问题定义
 ...
@@ -77,7 +80,7 @@ python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results
 ### 3.1 生成PPT大纲
 
 ```bash
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 ```
 
 **参数说明：**
@@ -89,7 +92,7 @@ python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.
 
 **输出文件：** `slides/SLIDES.md`
 
-**内容结构（10-13页）：**
+**内容结构（10-12页）：**
 1. 封面
 2. 问题定义
 3. 数据集介绍
@@ -102,12 +105,11 @@ python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.
 10. 关键可视化
 11. 消融实验总结
 12. 结论与展望
-13. Q&A
 
 ### 3.2 生成PPT文件
 
 ```bash
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 ```
 
 **参数说明：**
@@ -168,13 +170,13 @@ python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results
 
 ```bash
 # 生成初始大纲
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 手动编辑
 notepad slides/SLIDES.md
 
 # 重新生成PPT
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 ```
 
 ### 5.2 SLIDES.md 格式说明
@@ -249,7 +251,7 @@ python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results
 
 **解决方案：**
 ```bash
-pip install python-pptx
+conda run -n wafer-seg-class pip install python-pptx
 ```
 
 ### Q2: SLIDES.md文件不存在
@@ -262,7 +264,7 @@ pip install python-pptx
 **解决方案：**
 ```bash
 # 先生成大纲
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 ```
 
 ### Q3: 图片无法添加到PPT
@@ -297,7 +299,7 @@ python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.
 
 ```bash
 # 只运行第一步
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 然后手动使用其他工具（如Marp、Slidev）转换
 ```
@@ -336,13 +338,13 @@ slides/
 
 ```bash
 # 1. 安装依赖
-pip install python-pptx
+conda run -n wafer-seg-class pip install python-pptx
 
 # 2. 生成PPT大纲
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 3. 生成PPT文件
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 
 # 4. 查看生成的文件
 dir slides

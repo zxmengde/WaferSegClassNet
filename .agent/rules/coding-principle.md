@@ -1,5 +1,5 @@
 ---
-inclusion: always
+trigger: always_on
 ---
 
 # 编码原则

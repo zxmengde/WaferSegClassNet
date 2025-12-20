@@ -6,7 +6,7 @@
 检查图像/标签/mask文件数量一致性和标签分布
 
 Usage:
-    python scripts/sanity_check_data.py --data_root data/processed
+    conda run -n wafer-seg-class python scripts/sanity_check_data.py --data_root data/processed
 """
 
 import argparse

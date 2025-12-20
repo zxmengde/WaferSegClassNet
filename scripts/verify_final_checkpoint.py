@@ -100,6 +100,53 @@ def verify_ssl_debug(results_root: str = "results") -> dict:
     
     return results
 
+
+def verify_ddpm(
+    results_root: str = "results",
+    synthetic_root: str = "data/synthetic/ddpm",
+    exp_name: str = "ddpm_tail",
+) -> dict:
+    """验证DDPM训练与合成数据产物"""
+    exp_dir = os.path.join(results_root, exp_name)
+    results = {"name": exp_name, "passed": 0, "failed": 0, "details": []}
+    
+    print(f"\n{'='*60}")
+    print(f"验证DDPM尾部增强: {exp_name}")
+    print(f"{'='*60}")
+    
+    required_files = [
+        ("config_snapshot.yaml", "DDPM配置快照"),
+        ("history.json", "DDPM训练历史"),
+        ("checkpoints/best.pt", "DDPM最佳检查点"),
+    ]
+    
+    for filepath, desc in required_files:
+        path = os.path.join(exp_dir, filepath)
+        if check_file_exists(path, desc):
+            results["passed"] += 1
+        else:
+            results["failed"] += 1
+            results["details"].append(f"缺失: {filepath}")
+    
+    # 合成数据统计
+    synthetic_stats = os.path.join(synthetic_root, "synthetic_stats.json")
+    if check_file_exists(synthetic_stats, "合成样本统计"):
+        results["passed"] += 1
+    else:
+        results["failed"] += 1
+        results["details"].append("缺失: synthetic_stats.json")
+    
+    # 合成数据目录
+    for dirname in ["Images", "Labels", "Masks"]:
+        path = os.path.join(synthetic_root, dirname)
+        if check_dir_not_empty(path, f"合成{dirname}"):
+            results["passed"] += 1
+        else:
+            results["failed"] += 1
+            results["details"].append(f"缺失/空: {dirname}")
+    
+    return results
+
 def verify_e3(results_root: str = "results") -> dict:
     """验证E3实验的产物（特殊：包含separation_maps）"""
     exp_dir = os.path.join(results_root, "e3")
@@ -183,17 +230,35 @@ def main():
     # 4. 验证E1
     all_results.append(verify_experiment("e1"))
     
-    # 5. 验证E2 (使用e2_debug作为fallback)
+    # 5. 验证DDPM
+    all_results.append(verify_ddpm())
+
+    # 5.1 验证DDPM扩覆盖
+    all_results.append(
+        verify_ddpm(
+            exp_name="ddpm_tail_wide",
+            synthetic_root="data/synthetic/ddpm_wide",
+        )
+    )
+    
+    # 6. 验证E2 (使用e2_debug作为fallback)
     if os.path.exists("results/e2/metrics.csv"):
         all_results.append(verify_experiment("e2"))
     else:
         print("\n[注意] E2完整训练未完成，使用e2_debug结果")
         all_results.append(verify_experiment("e2_debug"))
+
+    # 6.1 验证E2变体
+    for exp_name in ["e2_focal", "e2_cb", "e2_ddpm_wide"]:
+        if os.path.exists(f"results/{exp_name}/metrics.csv"):
+            all_results.append(verify_experiment(exp_name))
+        else:
+            print(f"\n[注意] {exp_name} 未完成或缺失，跳过验证")
     
-    # 6. 验证E3
+    # 7. 验证E3
     all_results.append(verify_e3())
     
-    # 7. 验证报告
+    # 8. 验证报告
     all_results.append(verify_reports())
     
     # 汇总

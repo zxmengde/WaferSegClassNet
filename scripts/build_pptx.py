@@ -5,10 +5,10 @@ PPT文件生成脚本
 使用python-pptx从SLIDES.md生成slides/final.pptx
 
 用法:
-    python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+    conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 
 依赖:
-    pip install python-pptx
+    conda run -n wafer-seg-class pip install python-pptx
 """
 
 import argparse
@@ -190,7 +190,7 @@ def build_pptx(slides_md: Path, results_root: Path, output_path: Path) -> bool:
     # 延迟导入检查
     if not _check_pptx_import():
         print("[ERROR] python-pptx未安装，无法生成PPTX")
-        print("[INFO] 请运行: pip install python-pptx")
+        print("[INFO] 请运行: conda run -n wafer-seg-class pip install python-pptx")
         return False
     
     # 解析SLIDES.md
@@ -243,10 +243,10 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-    python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+    conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 
 依赖:
-    pip install python-pptx
+    conda run -n wafer-seg-class pip install python-pptx
         """
     )
     
@@ -279,7 +279,7 @@ def main():
     
     if not slides_md.exists():
         print(f"[ERROR] SLIDES.md文件不存在: {slides_md}")
-        print("[INFO] 请先运行: python scripts/generate_slides_md.py")
+        print("[INFO] 请先运行: conda run -n wafer-seg-class python scripts/generate_slides_md.py")
         return 1
     
     if not results_root.exists():

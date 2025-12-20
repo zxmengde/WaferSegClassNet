@@ -1,6 +1,6 @@
 # E2 长尾增强实验配置
-# E0 + 加权采样 + Focal Loss
-# 用于处理类别不平衡问题，提升尾部类别识别性能
+# E0 + DDPM 生成式尾部扩增
+# 先训练 DDPM 生成尾部样本，再将合成样本加入训练集
 
 experiment:
   name: "e2"
@@ -10,20 +10,19 @@ experiment:
 data:
   dataset: "MixedWM38"
   data_root: "data/processed"
+  synthetic_root: "data/synthetic/ddpm"
+  synthetic_only_train: true
   image_size: [224, 224]
-  batch_size: 32
+  batch_size: 128
   num_workers: 4
   classification_mode: "single_label"
-  # 加权采样器配置
-  sampler: "inverse"  # uniform | inverse | sqrt_inverse | effective_num
-  sampler_beta: 0.9999  # effective_num 模式的 beta 参数
-  tail_class_threshold: 10  # 样本数少于此值的类为尾部类
-  tail_augmentation_strength: 2.0  # 尾部类增强强度倍数
+  sampler: "uniform"
+  tail_class_threshold: 1000
   augmentation:
     wafer_friendly: true
     rotation: [0, 90, 180, 270]
     flip: true
-    morphological_noise: 0.15  # 略微增强形态学噪声
+    morphological_noise: 0.1
 
 model:
   encoder: "custom"
@@ -47,14 +46,13 @@ training:
   debug_max_per_class: 5
 
 loss:
-  # 使用 Focal Loss 处理类别不平衡
-  classification: "focal"  # cross_entropy | focal | class_balanced
+  classification: "cross_entropy"
   segmentation: "bce_dice"
   separation: "kl_divergence"
   weights: [1.0, 1.0, 0.5]
-  focal_gamma: 2.0  # Focal Loss gamma 参数
-  focal_alpha: null  # null 表示自动计算
-  class_balanced_beta: 0.9999  # Class-Balanced Loss beta 参数
+  focal_gamma: 2.0
+  focal_alpha: null
+  class_balanced_beta: 0.9999
 
 output:
   results_dir: "results"

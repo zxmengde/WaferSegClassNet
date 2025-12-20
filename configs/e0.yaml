@@ -10,7 +10,7 @@ data:
   dataset: "MixedWM38"
   data_root: "data/processed"
   image_size: [224, 224]
-  batch_size: 32
+  batch_size: 256
   num_workers: 4
   classification_mode: "single_label"
   augmentation:

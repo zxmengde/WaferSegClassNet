@@ -9,7 +9,7 @@ data:
     - 180
     - 270
     wafer_friendly: true
-  batch_size: 32
+  batch_size: 256
   classification_mode: single_label
   data_root: data/processed
   dataset: MixedWM38
@@ -18,6 +18,9 @@ data:
   - 224
   num_workers: 4
   sampler: uniform
+  sampler_beta: 0.9999
+  synthetic_only_train: true
+  synthetic_root: null
   tail_augmentation_strength: 1.0
   tail_class_threshold: 100
 debug: false
@@ -35,11 +38,16 @@ loss:
 model:
   classification_classes: 38
   encoder: custom
+  key_mapping:
+    extract_subtree: null
+    strip_prefix: []
+    use_encoder_state_dict: true
   pretrained_weights: null
   segmentation_classes: 1
   separation_channels: 8
   separation_enabled: false
   separation_mode: prototype
+  separation_temperature: 0.1
 name: e0
 output:
   results_dir: results

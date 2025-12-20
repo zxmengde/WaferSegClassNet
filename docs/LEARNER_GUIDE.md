@@ -26,79 +26,81 @@
 ```bash
 # 方法1：使用 environment.yml（推荐）
 conda env create -f environment.yml
-conda activate wafer-seg-class
 
 # 方法2：手动安装
 conda create -n wafer-seg-class python=3.10 -y
-conda activate wafer-seg-class
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt
+conda run -n wafer-seg-class pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+conda run -n wafer-seg-class pip install -r requirements.txt
 ```
 
 ### 1.2 数据准备
 
 ```bash
 # 完整数据
-python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed
 
 # Debug模式（每类最多5样本，快速验证）
-python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
 
 # 验证数据完整性
-python scripts/sanity_check_data.py --data_root data/processed
+conda run -n wafer-seg-class python scripts/sanity_check_data.py --data_root data/processed
 ```
 
 ### 1.3 Debug训练（5分钟内完成）
 
 ```bash
-python train.py --config configs/e0.yaml --debug
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml --debug
 ```
 
 ### 1.4 完整实验流程
 
 ```bash
 # ========== E0 基线实验 ==========
-python train.py --config configs/e0.yaml
-python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml
+conda run -n wafer-seg-class python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
 
 # ========== SSL 预训练 ==========
 # Debug验证（快速）
-python train_ssl.py --config configs/ssl_debug.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl_debug.yaml
 
 # 完整SSL预训练（可选，支持断点续训）
-python train_ssl.py --config configs/ssl.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl.yaml
 
 # ========== E1 SSL权重加载实验 ==========
-python train.py --config configs/e1.yaml
-python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python train.py --config configs/e1.yaml
+conda run -n wafer-seg-class python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+
+# ========== DDPM 生成式尾部增强 ==========
+conda run -n wafer-seg-class python scripts/train_ddpm.py --config configs/ddpm.yaml
+conda run -n wafer-seg-class python scripts/sample_ddpm.py --config configs/ddpm.yaml --ckpt results/ddpm_tail/checkpoints/best.pt
 
 # ========== E2 长尾增强实验 ==========
-python train.py --config configs/e2.yaml
-python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
+conda run -n wafer-seg-class python train.py --config configs/e2.yaml
+conda run -n wafer-seg-class python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
 
 # ========== E3 成分分离实验 ==========
 # 基于E1的checkpoint生成分离热力图
-python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
 
 # ========== 生成报告和PPT ==========
 # 生成对比表
-python scripts/generate_comparison.py --results_root results --out results/comparison.csv
+conda run -n wafer-seg-class python scripts/generate_comparison.py --results_root results --out results/comparison.csv
 
 # 生成实验报告
-python scripts/generate_report.py --results_root results --out report/REPORT.md
+conda run -n wafer-seg-class python scripts/generate_report.py --results_root results --out report/REPORT.md
 
 # 生成PPT大纲
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 生成PPT文件
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 ```
 
 ### 1.5 断点续训
 
 ```bash
 # 从最后的checkpoint恢复训练
-python train.py --config configs/e0.yaml --resume results/e0/checkpoints/last.pt
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml --resume results/e0/checkpoints/last.pt
 ```
 
 ---
@@ -109,15 +111,15 @@ python train.py --config configs/e0.yaml --resume results/e0/checkpoints/last.pt
 
 **命令：**
 ```bash
-conda activate wafer-seg-class
+# 无需手动激活，后续命令统一使用 conda run -n wafer-seg-class
 ```
 
 **预期输出：**
-- 命令行前缀变为 `(wafer-seg-class)`
+- 无需激活，命令行前缀保持不变
 
 **验证环境：**
 ```bash
-python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
+conda run -n wafer-seg-class python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}')"
 ```
 
 **预期输出：**
@@ -129,7 +131,7 @@ CUDA: True
 ### 2.2 验证完整环境
 
 ```bash
-python scripts/verify_setup.py
+conda run -n wafer-seg-class python scripts/verify_setup.py
 ```
 
 **预期输出：**
@@ -146,7 +148,7 @@ python scripts/verify_setup.py
 |------|------|----------|
 | 找不到conda命令 | conda未添加到PATH | 使用Anaconda Prompt或重新安装 |
 | CUDA不可用 | PyTorch版本与CUDA不匹配 | 重装PyTorch（见SETUP_WINDOWS.md） |
-| ModuleNotFoundError | 依赖未安装 | `pip install -r requirements.txt` |
+| ModuleNotFoundError | 依赖未安装 | `conda run -n wafer-seg-class pip install -r requirements.txt` |
 
 ---
 
@@ -157,7 +159,9 @@ python scripts/verify_setup.py
 ```
 data/
 ├── raw/
-│   └── MixedWM38.npz    ← 你的数据集文件
+│   ├── Wafer_Map_Datasets.npz      ← MixedWM38 原始数据
+│   └── MIR-WM811K/
+│       └── Python/WM811K.pkl       ← WM-811K 原始数据（SSL用）
 └── processed/           ← 运行脚本后自动生成
 ```
 
@@ -165,15 +169,20 @@ data/
 
 ```bash
 # Debug模式（推荐先用这个验证流程）
-python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed --debug --max-per-class 5
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug --max-per-class 5
 
 # 完整数据
-python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data/processed
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed
+```
+
+**可选：WM-811K（用于SSL预训练）**
+```bash
+conda run -n wafer-seg-class python scripts/prepare_wm811k.py --input data/raw/MIR-WM811K/Python/WM811K.pkl --output data/wm811k
 ```
 
 **预期输出：**
 ```
-[Info] Loading data from data/raw/MixedWM38.npz
+[Info] Loading data from data/raw/Wafer_Map_Datasets.npz
 [Info] Total samples: 38015
 [Info] Processing images...
 [Info] Saved to data/processed/
@@ -203,12 +212,12 @@ python scripts/prepare_mixedwm38.py --input data/raw/MixedWM38.npz --output data
 
 **训练：**
 ```bash
-python train.py --config configs/e0.yaml
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml
 ```
 
 **评估：**
 ```bash
-python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
 ```
 
 **输出目录：**
@@ -232,20 +241,20 @@ results/e0/
 **步骤1：SSL预训练（可选）**
 ```bash
 # Debug验证
-python train_ssl.py --config configs/ssl_debug.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl_debug.yaml
 
 # 完整预训练
-python train_ssl.py --config configs/ssl.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl.yaml
 ```
 
 **步骤2：E1训练**
 ```bash
-python train.py --config configs/e1.yaml
+conda run -n wafer-seg-class python train.py --config configs/e1.yaml
 ```
 
 **步骤3：评估**
 ```bash
-python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
 ```
 
 **验证权重加载：**
@@ -256,18 +265,25 @@ python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
 
 **目的：** 处理类别不平衡问题
 
+**步骤1：DDPM生成尾部样本**
+```bash
+conda run -n wafer-seg-class python scripts/train_ddpm.py --config configs/ddpm.yaml
+conda run -n wafer-seg-class python scripts/sample_ddpm.py --config configs/ddpm.yaml --ckpt results/ddpm_tail/checkpoints/best.pt
+```
+
 **训练：**
 ```bash
-python train.py --config configs/e2.yaml
+conda run -n wafer-seg-class python train.py --config configs/e2.yaml
 ```
 
 **评估：**
 ```bash
-python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
 ```
 
 **特殊输出：**
-- `results/e2_debug/tail_class_analysis.csv` - 尾部类别分析
+- `results/e2/tail_class_analysis.csv` - 尾部类别分析
+- `data/synthetic/ddpm/synthetic_stats.json` - 合成样本统计
 
 ### 4.4 E3 成分分离实验
 
@@ -275,7 +291,7 @@ python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
 
 **评估（基于E1模型）：**
 ```bash
-python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
 ```
 
 **特殊输出：**
@@ -326,11 +342,11 @@ False
 
 **排查步骤：**
 1. 检查NVIDIA驱动：`nvidia-smi`
-2. 检查PyTorch CUDA版本：`python -c "import torch; print(torch.version.cuda)"`
+2. 检查PyTorch CUDA版本：`conda run -n wafer-seg-class python -c "import torch; print(torch.version.cuda)"`
 3. 重新安装PyTorch：
    ```bash
-   pip uninstall torch torchvision -y
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+   conda run -n wafer-seg-class pip uninstall torch torchvision -y
+   conda run -n wafer-seg-class pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
    ```
 
 ### 5.2 依赖相关
@@ -344,20 +360,19 @@ ModuleNotFoundError: No module named 'xxx'
 
 **解决：**
 ```bash
-conda activate wafer-seg-class
-pip install xxx
+conda run -n wafer-seg-class pip install xxx
 ```
 
 **常见缺失包：**
 ```bash
-pip install opencv-python pyyaml tqdm hypothesis python-pptx
+conda run -n wafer-seg-class pip install opencv-python pyyaml tqdm hypothesis python-pptx
 ```
 
 #### 问题：版本冲突
 
 **解决：**
 ```bash
-pip install -r requirements.txt --force-reinstall
+conda run -n wafer-seg-class pip install -r requirements.txt --force-reinstall
 ```
 
 ### 5.3 路径相关
@@ -395,7 +410,7 @@ FileNotFoundError: [Errno 2] No such file or directory: 'data/processed/Images/.
 
 **可能原因及解决：**
 1. **学习率过大**：改为 `learning_rate: 0.0001`
-2. **数据问题**：运行 `python scripts/sanity_check_data.py`
+2. **数据问题**：运行 `conda run -n wafer-seg-class python scripts/sanity_check_data.py`
 3. **模型问题**：先用debug模式验证
 
 ---
@@ -482,9 +497,9 @@ Dice = 2 × IoU / (1 + IoU)
 **本项目情况：** 某些混合缺陷类只有几十个样本
 
 **解决方案（E2）：**
+- DDPM 生成式尾部增强（合成样本加入训练集）
 - 类均衡采样（WeightedRandomSampler）
-- Focal Loss
-- Class-Balanced Loss
+- Focal Loss / Class-Balanced Loss
 
 #### 弱监督（Weak Supervision）
 
@@ -612,11 +627,11 @@ Epoch 3: Loss=4.16
 
 ### 8.3 示例：SSL预训练数据不可用
 
-**假设：** WM-811K数据集可能无法获取
+**假设：** WM-811K数据集不可用或处理失败
 
 **备选方案：**
 1. 使用MixedWM38训练集作为SSL数据源
-2. 跳过SSL预训练，直接使用随机初始化
+2. 先排查 `data/raw/MIR-WM811K/Python/WM811K.pkl` 是否存在
 3. 使用公开的预训练权重
 
 **保守实现：** 使用MixedWM38训练集，这样不需要额外数据
@@ -652,8 +667,9 @@ Epoch 3: Loss=4.16
 
 ### 9.3 E2 长尾验证
 
-- [ ] `results/e2_debug/tail_class_analysis.csv` 存在
-- [ ] 尾部类别的F1应该有所提升
+- [ ] `results/e2/tail_class_analysis.csv` 存在
+- [ ] `data/synthetic/ddpm/synthetic_stats.json` 记录合成样本数
+- [ ] 检查尾部类别F1变化（若下降需记录失败原因）
 
 ### 9.4 E3 分离验证
 
@@ -683,13 +699,13 @@ Epoch 3: Loss=4.16
 
 ```bash
 # 快速验证流程
-python train.py --config configs/e0.yaml --debug
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml --debug
 
 # 检查数据
-python scripts/sanity_check_data.py --data_root data/processed
+conda run -n wafer-seg-class python scripts/sanity_check_data.py --data_root data/processed
 
 # 验证环境
-python scripts/verify_setup.py
+conda run -n wafer-seg-class python scripts/verify_setup.py
 ```
 
 ### 10.3 记住

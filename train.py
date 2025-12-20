@@ -395,6 +395,12 @@ def main():
     
     # 创建数据加载器
     logger.info("Creating data loaders...")
+    augmentation_config = None
+    if hasattr(config.data, 'augmentation') and config.data.augmentation is not None:
+        if isinstance(config.data.augmentation, dict):
+            augmentation_config = config.data.augmentation
+        else:
+            augmentation_config = vars(config.data.augmentation)
     train_loader, val_loader, test_loader = get_dataloaders(
         data_root=config.data.data_root,
         batch_size=batch_size,
@@ -402,8 +408,11 @@ def main():
         classification_mode=config.data.classification_mode,
         debug=config.debug,
         max_per_class=max_per_class or 5,
+        augmentation_config=augmentation_config,
         sampler_mode=sampler_mode,
         sampler_beta=sampler_beta,
+        synthetic_root=config.data.synthetic_root,
+        synthetic_only_train=config.data.synthetic_only_train,
     )
     logger.info(f"Train samples: {len(train_loader.dataset)}")
     logger.info(f"Val samples: {len(val_loader.dataset)}")

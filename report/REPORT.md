@@ -1,7 +1,7 @@
 # 实验报告：MixedWM38混合缺陷晶圆图谱多任务识别
 
-> 自动生成于 2025-12-19 01:50:44
-> Git Commit: 857bf094
+> 自动生成于 2025-12-20 10:13:45
+> Git Commit: a2704381
 > Random Seed: 42
 
 ## 摘要
@@ -35,7 +35,7 @@
 |------|------|----------|
 | E0 | 基线模型 | 多任务学习（分类+分割） |
 | E1 | SSL预训练 | SimCLR风格对比学习初始化encoder |
-| E2 | 长尾增强 | 加权采样 + Focal Loss |
+| E2 | 长尾增强（DDPM） | DDPM生成尾部样本 + 合成样本加入训练集 |
 | E3 | 成分分离 | 8通道弱监督分离头（Prototype方法） |
 
 ### SSL预训练数据源
@@ -77,14 +77,16 @@
 - RAM: 32GB
 - OS: Windows 11
 
-### 训练配置
+### 训练配置（来自 config_snapshot.yaml）
 
-- Batch Size: 32 (debug模式: 8)
-- Learning Rate: 0.001
-- Optimizer: AdamW
-- Scheduler: Cosine Annealing
-- AMP: 启用
-- Epochs: 100 (debug模式: 2)
+| 实验 | Batch Size | Learning Rate | Optimizer | Scheduler | AMP | Epochs |
+|------|------------|---------------|-----------|-----------|-----|--------|
+| E0 | 256 | 0.001 | adamw | cosine | true | 100 |
+| E1 | 128 | 0.001 | adamw | cosine | true | 100 |
+| E2 | 128 | 0.001 | adamw | cosine | true | 100 |
+| E3 | 32 | 0.001 | adamw | cosine | true | 100 |
+> Debug模式: epochs=2, batch_size=8
+
 
 ## 实验结果
 
@@ -92,10 +94,10 @@
 
 | 实验 | 来源 | Accuracy | Macro-F1 | Dice | IoU | vs E0 |
 |------|------|----------|----------|------|-----|-------|
-| E0 | e0 | 0.0000 | 0.0000 | 0.4264 | 0.2723 | - |
-| E1 | e1 | 0.0000 | 0.0000 | 0.4264 | 0.2723 | N/A |
-| E2 | e2 | 0.0000 | 0.0000 | 0.4264 | 0.2723 | N/A |
-| E3 | e3 | 0.0000 | 0.0000 | 0.4264 | 0.2723 | N/A |
+| E0 | e0 | 0.9824 | 0.9810 | 1.0000 | 1.0000 | - |
+| E1 | e1 | 0.9805 | 0.9799 | 1.0000 | 1.0000 | -0.1% |
+| E2 | e2 | 0.9819 | 0.9811 | 1.0000 | 1.0000 | +0.0% |
+| E3 | e3 | 0.9805 | 0.9799 | 1.0000 | 1.0000 | -0.1% |
 
 
 ### 可视化结果
@@ -104,33 +106,32 @@
 #### E0 实验结果
 
 **混淆矩阵**:
-![E0 Confusion Matrix](../results\e0/confusion_matrix.png)
+![E0 Confusion Matrix](../results/e0/confusion_matrix.png)
 
-**分割可视化**: 见 `results\e0/seg_overlays/` 目录
+**分割可视化**: 见 `results/e0/seg_overlays/` 目录
 
 #### E1 实验结果
 
 **混淆矩阵**:
-![E1 Confusion Matrix](../results\e1/confusion_matrix.png)
+![E1 Confusion Matrix](../results/e1/confusion_matrix.png)
 
-**分割可视化**: 见 `results\e1/seg_overlays/` 目录
+**分割可视化**: 见 `results/e1/seg_overlays/` 目录
 
 #### E2 实验结果
 
 **混淆矩阵**:
-![E2 Confusion Matrix](../results\e2/confusion_matrix.png)
+![E2 Confusion Matrix](../results/e2/confusion_matrix.png)
 
-**分割可视化**: 见 `results\e2/seg_overlays/` 目录
+**分割可视化**: 见 `results/e2/seg_overlays/` 目录
 
 #### E3 实验结果
 
 **混淆矩阵**:
-![E3 Confusion Matrix](../results\e3/confusion_matrix.png)
+![E3 Confusion Matrix](../results/e3/confusion_matrix.png)
 
-**分割可视化**: 见 `results\e3/seg_overlays/` 目录
+**分割可视化**: 见 `results/e3/seg_overlays/` 目录
 
-**成分分离热力图**: 见 `results\e3/separation_maps/` 目录
-
+**成分分离热力图**: 见 `results/e3/separation_maps/` 目录
 ## 消融实验分析
 
 ### E0 → E1: SSL预训练的影响
@@ -140,12 +141,15 @@
 - 提升模型泛化能力
 - 减少对标注数据的依赖
 
+**实验结果：E1 Macro-F1 = 0.9799，比 E0 下降 -0.11%**
+
 ### E0 → E2: 长尾增强的影响
 
-针对类别不平衡问题，E2实验采用：
-- **加权采样**：按类别频率倒数加权
-- **Focal Loss**：降低易分类样本的损失权重
-- **强增强**：对尾部类别应用更强的数据增强
+E2使用DDPM生成尾部类合成样本，并将合成样本仅加入训练集以缓解长尾问题。
+- **关键参数**: lr=0.001, weight_decay=0.01, grad_accum=1, sampler=uniform, loss=cross_entropy, morph_noise=0.1, synthetic_root=data/synthetic/ddpm
+- **DDPM合成**: total_generated=985, target_count=1000, output_root=data\synthetic\ddpm
+
+**实验结果：E2 Macro-F1 = 0.9811，比 E0 提升 +0.01%**
 
 ### E1 → E3: 成分分离的影响
 
@@ -154,117 +158,127 @@ E3在E1基础上添加8通道分离头，使用Prototype方法：
 2. 计算输入图像与各原型的余弦相似度
 3. 生成8通道热力图表示各基础缺陷的分布
 
+**实验结果：E3 Macro-F1 = 0.9799，E1 Macro-F1 = 0.9799，性能基本不变。**
 
 ## 复现命令清单
 
 ### 1. 环境准备
 
 ```bash
-# 创建conda环境
+# 创建conda环境（如已存在可跳过）
 conda env create -f environment.yml
-conda activate wafer
 
-# 或使用pip
-pip install -r requirements.txt
+# 安装依赖与环境检查
+conda run -n wafer-seg-class pip install -r requirements.txt
+conda run -n wafer-seg-class python check_env.py
 ```
 
 ### 2. 数据准备
 
 ```bash
 # 准备MixedWM38数据集
-python scripts/prepare_mixedwm38.py
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py
 ```
 
 ### 3. Debug模式验证（5分钟内完成）
 
 ```bash
-python train.py --config configs/e0.yaml --debug
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml --debug
 ```
 
 ### 4. E0基线实验
 
 ```bash
 # 训练
-python train.py --config configs/e0.yaml
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml
 
 # 评估
-python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e0.yaml --ckpt results/e0/checkpoints/best.pt
 ```
 
 ### 5. SSL预训练
 
 ```bash
 # Debug验证
-python train_ssl.py --config configs/ssl_debug.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl_debug.yaml
 
 # 完整预训练（可选）
-python train_ssl.py --config configs/ssl.yaml
+conda run -n wafer-seg-class python train_ssl.py --config configs/ssl.yaml
 ```
 
 ### 6. E1实验（SSL权重加载）
 
 ```bash
 # 训练
-python train.py --config configs/e1.yaml
+conda run -n wafer-seg-class python train.py --config configs/e1.yaml
 
 # 评估
-python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e1.yaml --ckpt results/e1/checkpoints/best.pt
 ```
 
-### 7. E2实验（长尾增强）
+### 7. DDPM生成式尾部增强（E2前置）
+
+```bash
+# 训练DDPM
+conda run -n wafer-seg-class python scripts/train_ddpm.py --config configs/ddpm.yaml
+
+# 生成合成样本
+conda run -n wafer-seg-class python scripts/sample_ddpm.py --config configs/ddpm.yaml --ckpt results/ddpm_tail/checkpoints/best.pt
+```
+
+### 8. E2实验（长尾增强）
 
 ```bash
 # 训练
-python train.py --config configs/e2.yaml
+conda run -n wafer-seg-class python train.py --config configs/e2.yaml
 
 # 评估
-python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e2.yaml --ckpt results/e2/checkpoints/best.pt
 ```
 
-### 8. E3实验（成分分离）
+### 9. E3实验（成分分离）
 
 ```bash
 # 评估（基于E1的checkpoint）
-python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
+conda run -n wafer-seg-class python eval.py --config configs/e3.yaml --ckpt results/e1/checkpoints/best.pt
 ```
 
-### 9. 生成对比表和报告
+### 10. 生成对比表和报告
 
 ```bash
 # 生成对比表
-python scripts/generate_comparison.py --results_root results --out results/comparison.csv
+conda run -n wafer-seg-class python scripts/generate_comparison.py --results_root results --out results/comparison.csv
 
 # 生成报告
-python scripts/generate_report.py --results_root results --out report/REPORT.md
+conda run -n wafer-seg-class python scripts/generate_report.py --results_root results --out report/REPORT.md
 
 # 生成PPT大纲
-python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
+conda run -n wafer-seg-class python scripts/generate_slides_md.py --results_root results --out slides/SLIDES.md
 
 # 生成PPT文件（可选）
-python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
+conda run -n wafer-seg-class python scripts/build_pptx.py --slides_md slides/SLIDES.md --results_root results --out slides/final.pptx
 ```
-
 
 ## 结论与展望
 
 ### 主要发现
 
 1. **多任务学习有效**：E0基线验证了分类和分割任务可以共享特征表示
-2. **SSL预训练**：E1实验探索了自监督预训练对下游任务的影响
-3. **长尾处理**：E2实验通过加权采样和Focal Loss缓解类别不平衡
-4. **可解释性**：E3实验通过Prototype方法提供混合缺陷的成分分离可视化
+2. **SSL预训练**：E1 Macro-F1 下降 -0.11%（0.9799 vs 0.9810）
+3. **长尾处理（DDPM）**：E2 Macro-F1 提升 +0.01%（0.9811）
+4. **可解释性**：E3提供成分分离热力图，且性能基本不变
 
 ### 局限性与取舍
 
-1. **SSL数据源**：由于WM-811K数据集不可用，SSL预训练使用MixedWM38训练集作为fallback
-2. **分离方法**：采用Prototype相似度方法而非端到端训练的分离头，作为弱监督方案的降级实现
-3. **长尾增强**：未实现DDPM生成式增强，采用类均衡采样+Focal Loss作为替代方案
+1. **SSL数据源**：WM-811K不可用，SSL预训练使用MixedWM38训练集作为fallback
+2. **分离方法**：采用Prototype相似度方法而非端到端训练的分离头
+3. **长尾增强**：已引入DDPM合成样本，仍需评估质量与分布偏移
 
 ### 未来工作
 
 1. 获取WM-811K数据集进行完整SSL预训练
 2. 实现端到端的弱监督分离头训练
-3. 探索DDPM生成式数据增强
+3. 优化DDPM生成质量与采样策略
 4. 扩展到更多缺陷类型和工艺场景
 
 ## 参考文献

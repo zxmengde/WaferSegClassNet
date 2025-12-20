@@ -170,7 +170,7 @@ class WaferFriendlyAugmentation:
             image = self._apply_morphological_noise(image)
         
         # 颜色抖动（仅应用于图像）
-        if self.color_jitter is not None:
+        if isinstance(self.color_jitter, dict):
             image = self._apply_color_jitter(image, self.color_jitter)
         
         # 高斯噪声（仅应用于图像）

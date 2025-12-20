@@ -23,6 +23,7 @@ from torch.amp import GradScaler, autocast
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 from .utils import get_git_commit, save_config_snapshot, save_meta_json
 
@@ -285,7 +286,11 @@ class SimCLRTrainer:
             epoch_start_time = time.time()
             
             # 训练一个 epoch
-            train_loss = self._train_epoch(train_loader)
+            train_loss = self._train_epoch(
+                train_loader,
+                epoch=epoch,
+                total_epochs=total_epochs,
+            )
             
             # 更新学习率
             current_lr = self.optimizer.param_groups[0]['lr']
@@ -319,14 +324,31 @@ class SimCLRTrainer:
         
         return self.history
     
-    def _train_epoch(self, train_loader: DataLoader) -> float:
+    def _train_epoch(
+        self,
+        train_loader: DataLoader,
+        epoch: Optional[int] = None,
+        total_epochs: Optional[int] = None,
+    ) -> float:
         """训练一个 epoch"""
         self.model.train()
         
         total_loss = 0.0
         num_batches = 0
         
-        for batch in train_loader:
+        if epoch is not None and total_epochs is not None:
+            desc = f"SSL Train {epoch + 1}/{total_epochs}"
+        else:
+            desc = "SSL Train"
+        
+        pbar = tqdm(
+            train_loader,
+            desc=desc,
+            dynamic_ncols=True,
+            leave=False,
+        )
+        
+        for batch in pbar:
             # 获取两个增强视图
             view1 = batch['view1'].to(self.device)
             view2 = batch['view2'].to(self.device)
@@ -350,6 +372,9 @@ class SimCLRTrainer:
             total_loss += loss.item()
             num_batches += 1
             self.global_step += 1
+            
+            avg_loss = total_loss / num_batches
+            pbar.set_postfix({'loss': f"{avg_loss:.4f}"}, refresh=False)
         
         return total_loss / num_batches
     

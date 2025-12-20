@@ -541,8 +541,13 @@ def main():
     # 生成尾部类别分析（如果使用了加权采样或 focal loss）
     sampler_mode = getattr(config.data, 'sampler', 'uniform')
     loss_type = config.loss.classification
+    synthetic_root = getattr(config.data, 'synthetic_root', None)
     
-    if sampler_mode not in ['uniform', 'none', None] or loss_type in ['focal', 'class_balanced']:
+    if (
+        sampler_mode not in ['uniform', 'none', None]
+        or loss_type in ['focal', 'class_balanced']
+        or synthetic_root
+    ):
         logger.info("Generating tail class analysis...")
         
         # 获取类别统计

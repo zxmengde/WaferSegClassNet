@@ -96,6 +96,8 @@ class MixedWM38Dataset(Dataset):
         pseudo_mask_config: Optional[dict] = None,
         debug: bool = False,
         max_per_class: int = 5,
+        synthetic_root: Optional[str] = None,
+        synthetic_only_train: bool = True,
     ):
         """
         Args:
@@ -113,6 +115,8 @@ class MixedWM38Dataset(Dataset):
         self.transform = transform
         self.debug = debug
         self.max_per_class = max_per_class
+        self.synthetic_root = Path(synthetic_root) if synthetic_root else None
+        self.synthetic_only_train = synthetic_only_train
         
         # 伪 mask 生成器
         self.pseudo_mask_generator = PseudoMaskGenerator(pseudo_mask_config)
@@ -130,17 +134,65 @@ class MixedWM38Dataset(Dataset):
         logger.info(f"Loaded {len(self.samples)} samples for {split} split")
         if self.pseudo_mask_used:
             logger.warning(f"Using pseudo masks for {self.pseudo_mask_count} samples")
-    
+
+    def _load_synthetic_samples(self) -> List[Dict]:
+        """加载合成样本列表（如果配置了 synthetic_root）"""
+        if self.synthetic_root is None:
+            return []
+        
+        images_dir = self.synthetic_root / "Images"
+        labels_dir = self.synthetic_root / "Labels"
+        masks_dir = self.synthetic_root / "Masks"
+        
+        if not images_dir.exists():
+            logger.warning(f"Synthetic images dir not found: {images_dir}")
+            return []
+        
+        synthetic_samples = []
+        image_files = sorted([f for f in os.listdir(images_dir) if f.endswith('.npy')])
+        
+        for img_file in image_files:
+            label_path = labels_dir / img_file
+            if not label_path.exists():
+                logger.warning(f"Synthetic label not found for {img_file}, skipping")
+                continue
+            
+            label_raw = np.load(label_path)
+            label_str = str(label_raw)
+            if label_str not in CLASS_MAPPING:
+                logger.warning(f"Unknown synthetic label {label_str} for {img_file}, skipping")
+                continue
+            
+            label_38 = CLASS_MAPPING[label_str]
+            mask_path = masks_dir / img_file
+            has_real_mask = mask_path.exists()
+            
+            if not has_real_mask:
+                self.pseudo_mask_used = True
+                self.pseudo_mask_count += 1
+            
+            synthetic_samples.append({
+                'image_path': str(images_dir / img_file),
+                'label_path': str(label_path),
+                'mask_path': str(mask_path) if has_real_mask else None,
+                'label_38': label_38,
+                'has_real_mask': has_real_mask,
+                'is_synthetic': True,
+            })
+        
+        if synthetic_samples:
+            logger.info(f"Loaded {len(synthetic_samples)} synthetic samples from {self.synthetic_root}")
+        
+        return synthetic_samples
+
     def _load_samples(self) -> List[Dict]:
         """加载样本列表"""
-        samples = []
+        base_samples = []
         
         # 获取所有图像文件
         image_files = sorted([f for f in os.listdir(self.images_dir) if f.endswith('.npy')])
         
-        # 按类别统计（用于 debug 模式）
-        class_counts = {i: 0 for i in range(38)}
-        
+        # 首先收集所有样本及其标签
         for img_file in image_files:
             # 加载标签
             label_path = self.labels_dir / img_file
@@ -157,12 +209,6 @@ class MixedWM38Dataset(Dataset):
             
             label_38 = CLASS_MAPPING[label_str]
             
-            # Debug 模式：限制每类样本数
-            if self.debug:
-                if class_counts[label_38] >= self.max_per_class:
-                    continue
-                class_counts[label_38] += 1
-            
             # 检查 mask 是否存在
             mask_path = self.masks_dir / img_file
             has_real_mask = mask_path.exists()
@@ -171,22 +217,86 @@ class MixedWM38Dataset(Dataset):
                 self.pseudo_mask_used = True
                 self.pseudo_mask_count += 1
             
-            samples.append({
+            base_samples.append({
                 'image_path': str(self.images_dir / img_file),
                 'label_path': str(label_path),
                 'mask_path': str(mask_path) if has_real_mask else None,
                 'label_38': label_38,
                 'has_real_mask': has_real_mask,
+                'is_synthetic': False,
             })
         
-        # 简单的 train/val/test 划分（80/10/10）
-        n = len(samples)
+        synthetic_samples = self._load_synthetic_samples()
+        if synthetic_samples and not self.synthetic_only_train:
+            all_samples = base_samples + synthetic_samples
+        else:
+            all_samples = base_samples
+        
+        # 使用分层采样进行 train/val/test 划分（80/10/10）
+        # 确保每个类别在各划分中都有样本
+        from collections import defaultdict
+        import random
+        
+        # 设置随机种子确保可复现
+        random.seed(42)
+        
+        # 按类别分组
+        class_samples = defaultdict(list)
+        for sample in all_samples:
+            class_samples[sample['label_38']].append(sample)
+        
+        # 对每个类别进行分层划分
+        train_samples = []
+        val_samples = []
+        test_samples = []
+        
+        for label, samples_in_class in class_samples.items():
+            # 打乱类内样本顺序
+            random.shuffle(samples_in_class)
+            
+            n = len(samples_in_class)
+            train_end = int(0.8 * n)
+            val_end = int(0.9 * n)
+            
+            # 确保每个划分至少有一个样本
+            if n >= 3:
+                train_end = max(1, train_end)
+                val_end = max(train_end + 1, val_end)
+            elif n == 2:
+                train_end = 1
+                val_end = 2
+            else:  # n == 1
+                # 只有一个样本时放入训练集
+                train_end = 1
+                val_end = 1
+            
+            train_samples.extend(samples_in_class[:train_end])
+            val_samples.extend(samples_in_class[train_end:val_end])
+            test_samples.extend(samples_in_class[val_end:])
+        
+        # 根据 split 选择样本
         if self.split == "train":
-            samples = samples[:int(0.8 * n)]
+            samples = train_samples
         elif self.split == "val":
-            samples = samples[int(0.8 * n):int(0.9 * n)]
+            samples = val_samples
         elif self.split == "test":
-            samples = samples[int(0.9 * n):]
+            samples = test_samples
+        else:
+            samples = all_samples
+        
+        if synthetic_samples and self.synthetic_only_train and self.split == "train":
+            samples = samples + synthetic_samples
+        
+        # Debug 模式：限制每类样本数
+        if self.debug:
+            class_counts = {i: 0 for i in range(38)}
+            filtered_samples = []
+            for sample in samples:
+                label_38 = sample['label_38']
+                if class_counts[label_38] < self.max_per_class:
+                    filtered_samples.append(sample)
+                    class_counts[label_38] += 1
+            samples = filtered_samples
         
         return samples
     

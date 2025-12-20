@@ -1,0 +1,58 @@
+# E2 长尾增强实验配置（Focal Loss）
+# E0 + DDPM 生成式尾部扩增 + Focal Loss
+
+experiment:
+  name: "e2_focal"
+  seed: 42
+  debug: false
+
+data:
+  dataset: "MixedWM38"
+  data_root: "data/processed"
+  synthetic_root: "data/synthetic/ddpm"
+  synthetic_only_train: true
+  image_size: [224, 224]
+  batch_size: 128
+  num_workers: 4
+  classification_mode: "single_label"
+  sampler: "uniform"
+  tail_class_threshold: 1000
+  augmentation:
+    wafer_friendly: true
+    rotation: [0, 90, 180, 270]
+    flip: true
+    morphological_noise: 0.1
+
+model:
+  encoder: "custom"
+  pretrained_weights: null
+  classification_classes: 38
+  segmentation_classes: 1
+  separation_enabled: false
+  separation_channels: 8
+
+training:
+  epochs: 100
+  optimizer: "adamw"
+  learning_rate: 0.001
+  weight_decay: 0.01
+  scheduler: "cosine"
+  amp_enabled: true
+  checkpoint_metric: "macro_f1"
+  grad_accum_steps: 1
+  debug_epochs: 2
+  debug_batch_size: 8
+  debug_max_per_class: 5
+
+loss:
+  classification: "focal"
+  segmentation: "bce_dice"
+  separation: "kl_divergence"
+  weights: [1.0, 1.0, 0.5]
+  focal_gamma: 2.0
+  focal_alpha: null
+  class_balanced_beta: 0.9999
+
+output:
+  results_dir: "results"
+  save_every: 10

@@ -50,6 +50,8 @@ class DataConfig:
     """数据配置"""
     dataset: str = "MixedWM38"
     data_root: str = "data/processed"
+    synthetic_root: Optional[str] = None
+    synthetic_only_train: bool = True
     image_size: Tuple[int, int] = (224, 224)
     batch_size: int = 32
     num_workers: int = 4

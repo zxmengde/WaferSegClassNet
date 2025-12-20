@@ -1,0 +1,51 @@
+# DDPM 长尾增强配置（尾部类生成）
+
+experiment:
+  name: "ddpm_tail"
+  seed: 42
+  debug: false
+
+data:
+  data_root: "data/processed"
+  image_size: 64
+  tail_threshold: 1000
+  tail_only: true
+  balanced_sampling: true
+  sampler_mode: "sqrt_inverse"
+  batch_size: 128
+  num_workers: 4
+  max_samples: null
+  debug_batch_size: 8
+  debug_max_samples: 200
+
+model:
+  base_channels: 64
+  channel_mults: [1, 2, 4]
+  num_res_blocks: 2
+  dropout: 0.0
+  class_conditional: true
+
+diffusion:
+  timesteps: 200
+  beta_start: 0.0001
+  beta_end: 0.02
+
+training:
+  epochs: 80
+  learning_rate: 0.0002
+  weight_decay: 0.0
+  amp_enabled: true
+  grad_accum_steps: 1
+  save_every: 10
+  debug_epochs: 2
+
+sampling:
+  output_root: "data/synthetic/ddpm"
+  output_image_size: 224
+  target_count: 1000
+  max_samples_per_class: null
+  min_defect_ratio: 0.001
+  max_defect_ratio: 0.4
+  batch_size: 64
+  seed: 42
+  overwrite: false

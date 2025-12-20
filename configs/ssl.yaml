@@ -11,11 +11,11 @@ data:
   data_root: "data/processed"
   # WM-811K 路径（如果可用）
   # 若不可用，自动使用 MixedWM38 train 图像作为 fallback
-  wm811k_path: null
+  wm811k_path: "data/wm811k"
   image_size: [224, 224]
   batch_size: 64
   num_workers: 4
-  max_samples: null  # null 表示使用全部样本
+  max_samples: 200000  # null 表示使用全部样本
   # Debug 模式参数
   debug_batch_size: 8
   debug_max_samples: 100
@@ -28,7 +28,7 @@ model:
   hidden_dim: 256
 
 training:
-  epochs: 100
+  epochs: 50
   optimizer: "adamw"
   learning_rate: 0.001
   weight_decay: 0.01

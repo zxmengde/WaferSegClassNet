@@ -51,22 +51,22 @@ Project Organization
 Dependencies:
 
 ```
-pip install -r requirements.txt
+conda run -n wafer-seg-class pip install -r requirements.txt
 ```
 
 ### (Optional) Conda Environment Configuration
 
 First, create a conda environment
 ```bash
-conda create -n wscn # python=3
-source activate wscn
+conda env create -f environment.yml
+# 后续命令统一使用 conda run -n wafer-seg-class
 ```
 
 Now, add dependencies
 
 Now, you can install the required packages.
 ```bash
-pip install -r requirements.txt
+conda run -n wafer-seg-class pip install -r requirements.txt
 ```
 
 ### Dataset
@@ -75,7 +75,7 @@ We have used MIXEDWM38 dataset which can be downloaded from <a href="https://git
 
 To prepare the dataset ready for training, Run following command from ```/src``` directory.
 
-```python data/make_dataset.py```
+```conda run -n wafer-seg-class python data/make_dataset.py```
 
 Above command should prepare Images, Labels, and Masks ready for training in ```data/processed``` directory.
 
@@ -85,7 +85,7 @@ change the hyperparameters and configuration parameters according to need in ```
 
 To train wscn, Run following command from ```/src``` directory.
 
-```python models/train_model.py``` 
+```conda run -n wafer-seg-class python models/train_model.py``` 
 
 All the trained checkpoints for pre-training as well as full model training will be saved in ```/weights.```
 
@@ -95,7 +95,7 @@ Above command will first pre-train encoder with N-Pair contrastive loss and then
 
 To train wscn, Run following command from ```/src``` directory.
 
-```python models/predict_model.py --image <path_of_an_image_in_numpy_format>``` 
+```conda run -n wafer-seg-class python models/predict_model.py --image <path_of_an_image_in_numpy_format>``` 
 
 Above command will predict the given image and save binary output mask in ```inference/``` directory.
 
@@ -103,7 +103,7 @@ Above command will predict the given image and save binary output mask in ```inf
 
 To test wscn with trained model, Run following command from ```/src``` directory.
 
-```python models/test_model.py ``` 
+```conda run -n wafer-seg-class python models/test_model.py ``` 
 
 Above command will generate IOU Score, and DICE Score for segmentation output, and classification report, Matthews Correlation Coefficient (MCC) and ROC AUC Curve for classification output. ROC-AUC Curve will be saved in ```inference/``` directory.
 

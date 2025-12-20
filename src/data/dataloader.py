@@ -31,6 +31,8 @@ def get_dataloaders(
     pin_memory: bool = True,
     sampler_mode: Optional[str] = None,
     sampler_beta: float = 0.9999,
+    synthetic_root: Optional[str] = None,
+    synthetic_only_train: bool = True,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     创建数据加载器
@@ -68,6 +70,8 @@ def get_dataloaders(
         transform=train_transform,
         debug=debug,
         max_per_class=max_per_class,
+        synthetic_root=synthetic_root,
+        synthetic_only_train=synthetic_only_train,
     )
     
     val_dataset = MixedWM38Dataset(
@@ -77,6 +81,8 @@ def get_dataloaders(
         transform=val_transform,
         debug=debug,
         max_per_class=max_per_class,
+        synthetic_root=synthetic_root,
+        synthetic_only_train=synthetic_only_train,
     )
     
     test_dataset = MixedWM38Dataset(
@@ -86,6 +92,8 @@ def get_dataloaders(
         transform=val_transform,
         debug=debug,
         max_per_class=max_per_class,
+        synthetic_root=synthetic_root,
+        synthetic_only_train=synthetic_only_train,
     )
     
     # 记录数据集大小
@@ -158,6 +166,8 @@ def get_dataloaders_from_config(config: Dict[str, Any]) -> Tuple[DataLoader, Dat
         debug=experiment_config.get('debug', False),
         max_per_class=data_config.get('max_per_class', 5),
         augmentation_config=data_config.get('augmentation', None),
+        synthetic_root=data_config.get('synthetic_root', None),
+        synthetic_only_train=data_config.get('synthetic_only_train', True),
     )
 
 

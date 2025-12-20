@@ -9,8 +9,7 @@
 打开一个新的命令行窗口，运行：
 
 ```bash
-conda activate wafer-seg-class
-python -c "import torch; print('PyTorch已安装！版本:', torch.__version__)"
+conda run -n wafer-seg-class python -c "import torch; print('PyTorch已安装！版本:', torch.__version__)"
 ```
 
 **如果看到版本号**：PyTorch已安装完成，可以继续！  
@@ -45,8 +44,7 @@ python -c "import torch; print('PyTorch已安装！版本:', torch.__version__)"
 ### 1. 验证环境
 
 ```bash
-conda activate wafer-seg-class
-python scripts/verify_setup.py
+conda run -n wafer-seg-class python scripts/verify_setup.py
 ```
 
 应该看到所有依赖都是 ✅
@@ -54,7 +52,7 @@ python scripts/verify_setup.py
 ### 2. 准备数据（Debug模式）
 
 ```bash
-python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug
+conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug
 ```
 
 这会创建一个小数据集（每类5个样本）用于快速测试。
@@ -62,7 +60,7 @@ python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --ou
 ### 3. 运行第一个训练（5分钟内完成）
 
 ```bash
-python train.py --config configs/e0.yaml --debug
+conda run -n wafer-seg-class python train.py --config configs/e0.yaml --debug
 ```
 
 这会：
@@ -88,9 +86,8 @@ start results\e0_debug\confusion_matrix.png
 **解决方案**：使用国内镜像（需要重新安装）
 
 ```bash
-conda activate wafer-seg-class
-pip uninstall torch torchvision -y
-pip install torch torchvision -i https://pypi.tuna.tsinghua.edu.cn/simple
+conda run -n wafer-seg-class pip uninstall torch torchvision -y
+conda run -n wafer-seg-class pip install torch torchvision -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ### 问题2：CUDA不可用

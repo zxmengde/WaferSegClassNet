@@ -23,6 +23,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler, autocast
+from tqdm import tqdm
 
 from .utils import get_git_commit, save_config_snapshot, save_meta_json
 
@@ -165,10 +166,19 @@ class Trainer:
             epoch_start_time = time.time()
             
             # 训练一个 epoch
-            train_metrics = self._train_epoch(train_loader)
+            train_metrics = self._train_epoch(
+                train_loader,
+                epoch=epoch,
+                total_epochs=total_epochs,
+            )
             
             # 验证
-            val_metrics = self._validate_epoch(val_loader, val_metric_fn)
+            val_metrics = self._validate_epoch(
+                val_loader,
+                metric_fn=val_metric_fn,
+                epoch=epoch,
+                total_epochs=total_epochs,
+            )
             
             # 更新学习率
             current_lr = self.optimizer.param_groups[0]['lr']
@@ -209,7 +219,12 @@ class Trainer:
         
         return self.history
     
-    def _train_epoch(self, train_loader: DataLoader) -> Dict[str, float]:
+    def _train_epoch(
+        self,
+        train_loader: DataLoader,
+        epoch: Optional[int] = None,
+        total_epochs: Optional[int] = None,
+    ) -> Dict[str, float]:
         """训练一个 epoch"""
         self.model.train()
         
@@ -220,7 +235,19 @@ class Trainer:
         
         self.optimizer.zero_grad()
         
-        for batch_idx, batch in enumerate(train_loader):
+        if epoch is not None and total_epochs is not None:
+            desc = f"Train {epoch + 1}/{total_epochs}"
+        else:
+            desc = "Train"
+        
+        pbar = tqdm(
+            train_loader,
+            desc=desc,
+            dynamic_ncols=True,
+            leave=False,
+        )
+        
+        for batch_idx, batch in enumerate(pbar):
             # 移动数据到设备
             images = batch['image'].to(self.device)
             targets = {
@@ -257,6 +284,14 @@ class Trainer:
             if 'seg' in losses:
                 total_seg_loss += losses['seg'].item()
             num_batches += 1
+            
+            avg_loss = total_loss / num_batches
+            postfix = {'loss': f"{avg_loss:.4f}"}
+            if total_cls_loss > 0:
+                postfix['cls'] = f"{total_cls_loss / num_batches:.4f}"
+            if total_seg_loss > 0:
+                postfix['seg'] = f"{total_seg_loss / num_batches:.4f}"
+            pbar.set_postfix(postfix, refresh=False)
         
         return {
             'loss': total_loss / num_batches,
@@ -269,6 +304,8 @@ class Trainer:
         self,
         val_loader: DataLoader,
         metric_fn: Optional[Callable] = None,
+        epoch: Optional[int] = None,
+        total_epochs: Optional[int] = None,
     ) -> Dict[str, float]:
         """验证一个 epoch"""
         self.model.eval()
@@ -283,7 +320,19 @@ class Trainer:
         all_seg_preds = []
         all_seg_masks = []
         
-        for batch in val_loader:
+        if epoch is not None and total_epochs is not None:
+            desc = f"Val {epoch + 1}/{total_epochs}"
+        else:
+            desc = "Val"
+        
+        pbar = tqdm(
+            val_loader,
+            desc=desc,
+            dynamic_ncols=True,
+            leave=False,
+        )
+        
+        for batch in pbar:
             images = batch['image'].to(self.device)
             targets = {
                 'cls_label': batch['label'].to(self.device),
@@ -306,6 +355,14 @@ class Trainer:
             all_labels.append(targets['cls_label'].cpu())
             all_seg_preds.append(torch.sigmoid(outputs['seg_mask']).cpu())
             all_seg_masks.append(targets['seg_mask'].cpu())
+            
+            avg_loss = total_loss / num_batches
+            postfix = {'loss': f"{avg_loss:.4f}"}
+            if total_cls_loss > 0:
+                postfix['cls'] = f"{total_cls_loss / num_batches:.4f}"
+            if total_seg_loss > 0:
+                postfix['seg'] = f"{total_seg_loss / num_batches:.4f}"
+            pbar.set_postfix(postfix, refresh=False)
         
         metrics = {
             'loss': total_loss / num_batches,

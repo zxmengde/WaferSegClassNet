@@ -11,7 +11,7 @@ data:
   dataset: "MixedWM38"
   data_root: "data/processed"
   image_size: [224, 224]
-  batch_size: 32
+  batch_size: 128
   num_workers: 4
   classification_mode: "single_label"
   augmentation:
@@ -23,11 +23,10 @@ data:
 model:
   encoder: "custom"
   # SSL 预训练权重路径
-  # 默认使用 Phase 15 产出的 ssl_debug checkpoint
-  # 可切换到 ssl 完整训练的 checkpoint 或公开预训练权重
-  pretrained_weights: "results/ssl_debug/checkpoints/last.pt"
-  # 备选路径（完整 SSL 训练）:
-  # pretrained_weights: "results/ssl/checkpoints/last.pt"
+  # 默认使用完整 SSL 训练的 checkpoint（如未训练请先运行 train_ssl.py）
+  pretrained_weights: "results/ssl/checkpoints/last.pt"
+  # 备选路径（debug SSL 训练）:
+  # pretrained_weights: "results/ssl_debug/checkpoints/last.pt"
   # 备选路径（公开预训练权重，如 WaPIRL）:
   # pretrained_weights: "weights/wapirl_encoder.pt"
   

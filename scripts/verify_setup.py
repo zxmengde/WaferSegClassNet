@@ -10,7 +10,7 @@
 4. 数据加载（如果数据存在）
 
 Usage:
-    python scripts/verify_setup.py
+    conda run -n wafer-seg-class python scripts/verify_setup.py
 """
 
 import sys
@@ -144,7 +144,7 @@ def check_data():
     if not data_root.exists():
         print(f"⚠️ 数据目录不存在: {data_root}")
         print("请先运行数据准备脚本:")
-        print("  python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed")
+        print("  conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed")
         return True  # 不强制要求数据存在
     
     images_dir = data_root / "Images"
@@ -259,8 +259,8 @@ def main():
     if all_passed:
         print("🎉 所有检查通过！环境配置正确。")
         print("\n下一步:")
-        print("1. 准备数据: python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug")
-        print("2. 运行训练: python train.py --config configs/e0.yaml --debug")
+        print("1. 准备数据: conda run -n wafer-seg-class python scripts/prepare_mixedwm38.py --input data/raw/Wafer_Map_Datasets.npz --output data/processed --debug")
+        print("2. 运行训练: conda run -n wafer-seg-class python train.py --config configs/e0.yaml --debug")
     else:
         print("⚠️ 部分检查未通过，请根据上述提示修复问题。")
     
